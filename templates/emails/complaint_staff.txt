@@ -1,0 +1,9 @@
+Nuevo registro en el Libro de Reclamaciones
+
+Número: {{ complaint.complaint_number }}
+Tipo: {{ complaint.filing_type }}
+Categoría: {{ complaint.category.code }}
+De: {{ complaint.full_name }} <{{ complaint.email }}>
+Fecha límite: {{ complaint.response_due_at }}
+
+{{ complaint.description }}

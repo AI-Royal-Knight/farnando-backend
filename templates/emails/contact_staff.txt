@@ -1,0 +1,6 @@
+Nuevo mensaje de contacto
+
+De: {{ message.full_name }} <{{ message.email }}>
+Fecha: {{ message.created_at }}
+
+{{ message.message }}

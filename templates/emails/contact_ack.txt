@@ -1,0 +1,7 @@
+Hola {{ full_name }},
+
+Recibimos tu mensaje. Nuestro equipo te responderá a la brevedad.
+
+{{ message }}
+
+Adelgaceya

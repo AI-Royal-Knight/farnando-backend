@@ -58,4 +58,6 @@ docker-check:
 	FIELD_ENCRYPTION_KEYS=tW8uBgbY93Ih64CaqRsEIDheNMVimjTE97KQKAyVAxA= \
 	CSRF_TRUSTED_ORIGINS=https://app.example.com \
 	EMAIL_BACKEND=anymail.backends.mailgun.EmailBackend \
+	CAPTCHA_VERIFIER=apps.core.captcha.TurnstileCaptchaVerifier \
+	CAPTCHA_SECRET_KEY=ci-captcha-secret \
 	uv run python manage.py check --deploy

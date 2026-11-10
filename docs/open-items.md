@@ -3,6 +3,35 @@
 This file is the single source of truth for unfinished work. Anything marked
 `TODO(...)` is deliberately incomplete, not a hidden stub.
 
+
+## API Contract Part 1 open decisions
+
+- `LEGAL_REVIEW`: replace the seeded legal-document sections (`CONTENT PENDING
+  LEGAL REVIEW`) with approved Terms, Privacy Policy and health-data text. The
+  current versions are `2026-11-01`.
+- `LEGAL_REVIEW`: confirm the Complaints Book required fields, categories,
+  document/phone validation and 24-hour response SLA.
+- `LEGAL_REVIEW`: confirm the registration duplicate-email trade-off in
+  `docs/contract-deviations.md`: the contract requires a generic 400 for existing
+  addresses, which is observable.
+- `[OPEN]`: choose the captcha provider. `TurnstileCaptchaVerifier` is available;
+  production fails fast unless a real verifier and secret are configured.
+- `[OPEN]`: confirm supported languages. `Accept-Language: en|es` and framework
+  localization are wired; custom messages remain English pending copy approval.
+- `[OPEN]`: real footer phone/address, social links, site legal entity and
+  marketing statistics must be entered in the admin/database.
+- `[OPEN]`: testimonial consent evidence and the 4.92 rating claim need business
+  review. Only `is_published` testimonials are returned.
+- `TODO(part-1)`: public `PUT/PATCH/POST` content management endpoints for legal
+  documents arrive with Part 5; the model/admin support versioning and current
+  flags now.
+- `TODO(part-1)`: `GET /public/complaints/{number}/?email=...` is included even
+  though it was marked `[OPEN]`; confirm whether it stays.
+- `TODO(part-1)`: complaint staff responses/status changes require a Part 5
+  workflow; originals are already immutable in admin.
+- `TODO(part-1)`: enforce `HasCurrentConsents` and `IsEmailVerified` on the
+  patient clinical endpoints as they land in Part 2.
+
 ## Legal and clinical review
 
 - `LEGAL_REVIEW`: approve the Terms, Privacy Policy and sensitive-health-data
@@ -111,9 +140,10 @@ This file is the single source of truth for unfinished work. Anything marked
   add a short-lived docs token flow.
 - `TODO(phase-1)`: access tokens cannot be revoked before their 15-minute
   expiry; sensitive future operations must require re-authentication.
-- `TODO(phase-1)`: the registration endpoint deliberately returns 202 for
-  existing emails; the frontend must present "check your email" rather than a
-  success-with-tokens flow.
+- `TODO(part-1)`: the registration endpoint follows the contract: 201 on
+  success, generic 400 on an existing email. The frontend must handle both and
+  must not infer account existence from the error beyond what the contract
+  already exposes.
 - `TODO(phase-1)`: no SMS provider yet; phone verification is deferred to
   Phase 2/5 if the product requires it.
 

@@ -11,6 +11,7 @@ class CoreConfig(AppConfig):
     verbose_name = "Core"
 
     def ready(self) -> None:
+        from apps.core import schema_extensions  # noqa: F401 - register spectacular extension
         from apps.core.logging import configure_logging
 
         configure_logging()

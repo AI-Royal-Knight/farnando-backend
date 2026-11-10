@@ -52,6 +52,13 @@ if not CSRF_TRUSTED_ORIGINS:
     raise ImproperlyConfigured("CSRF_TRUSTED_ORIGINS must list the production frontend origins.")
 
 ENABLE_API_DOCS = env.bool("ENABLE_API_DOCS", default=False)
+CAPTCHA_REQUIRED = env.bool("CAPTCHA_REQUIRED", default=True)
+if CAPTCHA_REQUIRED:
+    _require("CAPTCHA_SECRET_KEY")
+    if str(CAPTCHA_VERIFIER).endswith("NoopCaptchaVerifier"):
+        raise ImproperlyConfigured(
+            "A real CAPTCHA_VERIFIER is required in production when CAPTCHA_REQUIRED is true."
+        )
 
 SECURE_SSL_REDIRECT = True
 CONTENT_SECURITY_POLICY["DIRECTIVES"]["upgrade-insecure-requests"] = True

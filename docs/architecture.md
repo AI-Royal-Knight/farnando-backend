@@ -39,7 +39,7 @@ retention obligations.
 | App | Responsibility | Phase |
 | --- | --- | --- |
 | `core` | Base model, request IDs, error envelope, pagination, permissions, encryption field, email port, health, logging, schema helpers | 1 |
-| `accounts` | Custom user, roles, consents, registration, JWT, Google, verification, password reset | 1 |
+| `accounts` | Custom user, roles, legal documents, consents, registration, JWT, Google, verification, password reset | 1 |
 | `patients` | Patient profile, units, demographics | 2 |
 | `physicians` | Physician profile, licence, specialties, availability | 2–3 |
 | `staff` | Staff profile and operational permissions | 2 |
@@ -48,11 +48,11 @@ retention obligations.
 | `evaluations` | Physician queue, state machine, status history | 3 |
 | `consultations` | Scheduling, video rooms/tokens, consultation notes | 3 |
 | `treatments` | Programs, protocols, prescribed treatments, refills, dose reminders | 3–4 |
-| `catalog` | Programs, packages, content items, treatment cards | 4 |
+| `catalog` | Public content (site settings, FAQs, testimonials, stats, complaint categories) now; programs/packages/content in Part 4 | 1, 4 |
 | `orders` | Orders, items, subscriptions, shipments, tracking | 4 |
 | `payments` | Payment intents, webhooks, refunds, dunning | 4 |
 | `messaging` | Threads, messages, attachments, read receipts | 5 |
-| `support` | Tickets, contact messages, complaints book | 5 |
+| `support` | Contact messages and complaints book now; support tickets in Part 5 | 1, 5 |
 | `notifications` | Email/SMS/in-app notifications and templates | 1, 5 |
 | `reports` | Aggregate, cached analytics | 6 |
 | `audit` | Append-only audit log and clinical-access mixin | 2 |
@@ -124,14 +124,15 @@ also use it. No exception message or traceback is returned to clients.
 - Access JWT: 15 minutes. Refresh JWT: 7 days, rotating, blacklisted after
   rotation. Logout and password reset blacklist outstanding refresh tokens.
   Access tokens cannot be revoked before expiry; see ADR-0002 for the trade-off.
-- Registration is enumeration-resistant: the endpoint always returns 202. New
-  addresses receive a verification email; existing addresses receive an
+- Registration follows the owner-approved Part 1 contract: `201` on success,
+  a generic `400 validation_error` for an existing address, and an
   account-exists email with a reset link. Terms and privacy consent are stored
-  with version, timestamp, IP and user agent.
+  with version, timestamp, IP and user agent. The enumeration trade-off is
+  recorded in `docs/contract-deviations.md`.
 - Email verification uses a stateless signed token bound to the user's email,
   password and verification state; the link expires after
   `EMAIL_VERIFICATION_TIMEOUT` (3 days by default).
-- Password reset always returns 202. Reset tokens are single-use by construction
+- Password reset always returns 204. Reset tokens are single-use by construction
   (the password hash participates in the token) and revoke outstanding refresh
   tokens.
 - Google sign-in verifies a Google ID token through django-allauth. A verified
@@ -191,9 +192,10 @@ The full target ERD is in [erd.md](erd.md) and will be completed as phases land.
 
 | Screen | Phase 1 endpoints | Later endpoints |
 | --- | --- | --- |
-| Auth | register, login, refresh, logout, verify email, resend, password reset, Google, me | — |
-| Consent | list/create consents | health-data consent at assessment submit |
-| Profile | display names | patient/physician/staff profiles |
+| Auth | register, login, refresh, logout, verify email, resend, password reset, change password, Google, me | — |
+| Legal/consent | current legal documents, consent history/create | health-data consent enforcement at assessment submit |
+| Public | site settings, FAQs, testimonials, stats, complaint categories, contact, complaints book | — |
+| Profile | — | patient/physician/staff profiles |
 | Assessment | — | draft, steps, summary, submit, idempotency |
 | Labs | — | upload URL, confirm, list, pre-signed download |
 | Evaluation | — | physician queue, decide, request labs, history |

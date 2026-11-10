@@ -11,7 +11,7 @@ from django.contrib.auth.forms import UserChangeForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
-from apps.accounts.models import ConsentRecord, User
+from apps.accounts.models import ConsentRecord, LegalDocument, User
 
 
 class EmailUserCreationForm(forms.ModelForm):  # type: ignore[type-arg]
@@ -20,7 +20,7 @@ class EmailUserCreationForm(forms.ModelForm):  # type: ignore[type-arg]
 
     class Meta:
         model = User
-        fields = ("email", "first_name", "last_name", "role")
+        fields = ("email", "full_name", "role")
 
     def clean_password2(self) -> str:
         password1 = self.cleaned_data.get("password1")
@@ -66,7 +66,7 @@ class UserAdmin(BaseUserAdmin):  # type: ignore[type-arg]
     readonly_fields = ("last_login", "date_joined", "email_verified_at")
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        ("Personal information", {"fields": ("first_name", "last_name")}),
+        ("Personal information", {"fields": ("full_name",)}),
         ("Role and status", {"fields": ("role", "is_email_verified", "email_verified_at")}),
         (
             "Permissions",
@@ -81,8 +81,7 @@ class UserAdmin(BaseUserAdmin):  # type: ignore[type-arg]
                 "classes": ("wide",),
                 "fields": (
                     "email",
-                    "first_name",
-                    "last_name",
+                    "full_name",
                     "role",
                     "password1",
                     "password2",
@@ -109,6 +108,31 @@ class ConsentRecordAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     )
 
     def has_add_permission(self, request: Any, obj: Any = None) -> bool:
+        return False
+
+    def has_change_permission(self, request: Any, obj: Any = None) -> bool:
+        return False
+
+    def has_delete_permission(self, request: Any, obj: Any = None) -> bool:
+        return False
+
+
+@admin.register(LegalDocument)
+class LegalDocumentAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+    list_display = ("document_type", "version", "title", "is_current", "published_at")
+    list_filter = ("document_type", "is_current")
+    search_fields = ("title", "version")
+    readonly_fields = (
+        "id",
+        "document_type",
+        "version",
+        "title",
+        "sections",
+        "published_at",
+        "is_current",
+    )
+
+    def has_add_permission(self, request: Any) -> bool:
         return False
 
     def has_change_permission(self, request: Any, obj: Any = None) -> bool:

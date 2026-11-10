@@ -61,6 +61,8 @@ INSTALLED_APPS = [
     # Local apps
     "apps.core.apps.CoreConfig",
     "apps.accounts",
+    "apps.catalog.apps.CatalogConfig",
+    "apps.support.apps.SupportConfig",
 ]
 
 MIDDLEWARE = [
@@ -69,6 +71,7 @@ MIDDLEWARE = [
     "apps.core.middleware.RequestIDMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -140,7 +143,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
-        "OPTIONS": {"min_length": 12},
+        "OPTIONS": {"min_length": 8},
     },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -217,7 +220,7 @@ SOCIALACCOUNT_PROVIDERS = {
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "apps.accounts.authentication.ContractJWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "apps.core.permissions.IsAuthenticatedAndActive",
@@ -226,6 +229,8 @@ REST_FRAMEWORK = {
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
     "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.DefaultPageNumberPagination",
     "PAGE_SIZE": 20,
+    "DATETIME_FORMAT": "%Y-%m-%dT%H:%M:%SZ",
+    "DATE_FORMAT": "%Y-%m-%d",
     "EXCEPTION_HANDLER": "apps.core.exceptions.exception_handler",
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_FILTER_BACKENDS": [
@@ -246,6 +251,11 @@ REST_FRAMEWORK = {
         "email_verification": env("THROTTLE_EMAIL_VERIFICATION", default="3/hour"),
         "upload": env("THROTTLE_UPLOAD", default="20/hour"),
         "messaging": env("THROTTLE_MESSAGING", default="60/min"),
+        "password_reset_email": env("THROTTLE_PASSWORD_RESET_EMAIL", default="3/hour"),
+        "contact": env("THROTTLE_CONTACT", default="5/hour"),
+        "contact_email": env("THROTTLE_CONTACT_EMAIL", default="3/hour"),
+        "complaint": env("THROTTLE_COMPLAINT", default="5/hour"),
+        "complaint_status": env("THROTTLE_COMPLAINT_STATUS", default="10/hour"),
     },
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
 }
@@ -274,6 +284,9 @@ SPECTACULAR_SETTINGS = {
     "TAGS": [
         {"name": "auth", "description": "Registration, login, tokens and consents."},
         {"name": "accounts", "description": "Current user and account lifecycle."},
+        {"name": "legal", "description": "Current legal documents."},
+        {"name": "consents", "description": "Consent history and acceptance."},
+        {"name": "public", "description": "Anonymous public content and forms."},
         {"name": "health", "description": "Liveness and readiness probes."},
     ],
     "SECURITY": [{"bearerAuth": []}],
@@ -295,9 +308,15 @@ SPECTACULAR_SETTINGS = {
             ("ADMIN", "Administrator"),
         ],
         "ConsentDocumentTypeEnum": [
-            ("TERMS", "Terms and conditions"),
-            ("PRIVACY", "Privacy policy"),
-            ("HEALTH_DATA", "Sensitive health data processing"),
+            ("TERMS_OF_SERVICE", "Terms of Service"),
+            ("PRIVACY_POLICY", "Privacy Policy"),
+            ("HEALTH_DATA_PROCESSING", "Health data processing"),
+        ],
+        "ComplaintDocumentTypeEnum": [
+            ("DNI", "DNI"),
+            ("CE", "Carné de extranjería"),
+            ("PASSPORT", "Passport"),
+            ("RUC", "RUC"),
         ],
     },
     "SWAGGER_UI_SETTINGS": {
@@ -377,7 +396,7 @@ EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Adelgaceya <no-reply@adelgaceya.pe>")
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 EMAIL_SERVICE = env("EMAIL_SERVICE", default="apps.core.email.DjangoEmailService")
-EMAIL_VERIFICATION_TIMEOUT = env.int("EMAIL_VERIFICATION_TIMEOUT", default=60 * 60 * 24 * 3)
+EMAIL_VERIFICATION_TIMEOUT = env.int("EMAIL_VERIFICATION_TIMEOUT", default=60 * 60 * 24)
 PASSWORD_RESET_TIMEOUT = env.int("PASSWORD_RESET_TIMEOUT", default=60 * 60)
 
 ANYMAIL = {
@@ -391,10 +410,16 @@ ANYMAIL = {
 # Security, privacy and compliance
 # ---------------------------------------------------------------------------
 CONSENT_VERSIONS = {
-    "TERMS": env("CONSENT_TERMS_VERSION", default="2026-01"),
-    "PRIVACY": env("CONSENT_PRIVACY_VERSION", default="2026-01"),
-    "HEALTH_DATA": env("CONSENT_HEALTH_DATA_VERSION", default="2026-01"),
+    "TERMS_OF_SERVICE": env("CONSENT_TERMS_VERSION", default="2026-11-01"),
+    "PRIVACY_POLICY": env("CONSENT_PRIVACY_VERSION", default="2026-11-01"),
+    "HEALTH_DATA_PROCESSING": env("CONSENT_HEALTH_DATA_VERSION", default="2026-11-01"),
 }
+
+COMPLAINT_RESPONSE_SLA_HOURS = env.int("COMPLAINT_RESPONSE_SLA_HOURS", default=24)
+SUPPORT_NOTIFICATION_EMAILS = env.list("SUPPORT_NOTIFICATION_EMAILS", default=[])
+CAPTCHA_REQUIRED = env.bool("CAPTCHA_REQUIRED", default=False)
+CAPTCHA_VERIFIER = env("CAPTCHA_VERIFIER", default="apps.core.captcha.NoopCaptchaVerifier")
+CAPTCHA_SECRET_KEY = env("CAPTCHA_SECRET_KEY", default="")
 
 # Fernet keys. The first key encrypts new values; all keys can decrypt, which
 # permits rotation. Production must supply an explicit key list.
@@ -491,7 +516,8 @@ LOGGING = {
 }
 
 # Locale
-LANGUAGE_CODE = "es-pe"
+LANGUAGE_CODE = "en"
+LANGUAGES = [("en", "English"), ("es", "Spanish")]
 TIME_ZONE = "America/Lima"
 USE_I18N = True
 USE_TZ = True

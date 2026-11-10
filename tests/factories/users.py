@@ -19,8 +19,7 @@ class UserFactory(factory.django.DjangoModelFactory):
         skip_postgeneration_save = True
 
     email = factory.Sequence(lambda n: f"user{n}@example.com")
-    first_name = factory.Sequence(lambda n: f"Nombre{n}")
-    last_name = "Apellido"
+    full_name = factory.Sequence(lambda n: f"Nombre{n} Apellido")
     role = Role.PATIENT
     is_email_verified = True
     email_verified_at = factory.LazyFunction(timezone.now)
@@ -64,7 +63,7 @@ class ConsentRecordFactory(factory.django.DjangoModelFactory):
         model = ConsentRecord
 
     user = factory.SubFactory(PatientFactory)
-    document_type = ConsentRecord.DocumentType.TERMS
+    document_type = ConsentRecord.DocumentType.TERMS_OF_SERVICE
     version = "2026-01"
     ip_address = "127.0.0.1"
     user_agent = "pytest"

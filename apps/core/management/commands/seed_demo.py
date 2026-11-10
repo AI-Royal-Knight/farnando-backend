@@ -13,37 +13,34 @@ from django.core.management.base import BaseCommand, CommandParser
 from django.utils import timezone
 
 from apps.accounts.enums import Role
-from apps.accounts.models import ConsentRecord, User
+from apps.accounts.models import ConsentRecord, LegalDocument, User
+from apps.catalog.models import FAQ, PublicStats, SiteSettings, Testimonial
 
 DEMO_USERS = [
     {
         "email": "admin@adelgaceya.pe",
-        "first_name": "Ada",
-        "last_name": "Administradora",
+        "full_name": "Ada Administradora",
         "role": Role.ADMIN,
         "is_staff": True,
         "is_superuser": True,
     },
     {
         "email": "marcus.vance@adelgaceya.pe",
-        "first_name": "Marcus",
-        "last_name": "Vance",
+        "full_name": "Marcus Vance",
         "role": Role.PHYSICIAN,
         "is_staff": False,
         "is_superuser": False,
     },
     {
         "email": "staff@adelgaceya.pe",
-        "first_name": "Sofía",
-        "last_name": "Soporte",
+        "full_name": "Sofía Soporte",
         "role": Role.STAFF,
         "is_staff": True,
         "is_superuser": False,
     },
     {
         "email": "paciente@adelgaceya.pe",
-        "first_name": "Ana",
-        "last_name": "Quispe",
+        "full_name": "Ana Quispe",
         "role": Role.PATIENT,
         "is_staff": False,
         "is_superuser": False,
@@ -67,8 +64,7 @@ class Command(BaseCommand):
             user, _created = User.objects.get_or_create(
                 email=spec["email"],
                 defaults={
-                    "first_name": spec["first_name"],
-                    "last_name": spec["last_name"],
+                    "full_name": spec["full_name"],
                     "role": spec["role"],
                     "is_staff": spec["is_staff"],
                     "is_superuser": spec["is_superuser"],
@@ -76,6 +72,7 @@ class Command(BaseCommand):
                     "email_verified_at": timezone.now(),
                 },
             )
+            user.full_name = spec["full_name"]
             user.role = spec["role"]
             user.is_staff = spec["is_staff"]
             user.is_superuser = spec["is_superuser"]
@@ -83,18 +80,79 @@ class Command(BaseCommand):
             user.email_verified_at = user.email_verified_at or timezone.now()
             user.set_password(password)
             user.save()
-            for document_type in (
-                ConsentRecord.DocumentType.TERMS,
-                ConsentRecord.DocumentType.PRIVACY,
-                ConsentRecord.DocumentType.HEALTH_DATA,
-            ):
+            for document_type in ConsentRecord.DocumentType.values:
+                document = LegalDocument.objects.filter(
+                    document_type=document_type, is_current=True
+                ).first()
+                version = document.version if document else settings.CONSENT_VERSIONS[document_type]
                 ConsentRecord.objects.get_or_create(
                     user=user,
                     document_type=document_type,
-                    version=settings.CONSENT_VERSIONS[document_type],
+                    version=version,
                     defaults={"accepted_at": timezone.now()},
                 )
             self.stdout.write(self.style.SUCCESS(f"ready: {user.email} ({user.role})"))
+
+        site = SiteSettings.load()
+        site.contact_email = "hola@adelgaceya.pe"
+        site.contact_phone = "+51 999 999 999"
+        site.address = "Lima, Perú"
+        site.legal_entity_name = "Adelgaceya S.A.C."
+        site.social_links = [
+            {"platform": "INSTAGRAM", "url": "https://instagram.com/adelgaceya"},
+            {"platform": "FACEBOOK", "url": "https://facebook.com/adelgaceya"},
+        ]
+        site.save()
+
+        stats = PublicStats.load()
+        stats.sustained_weight_loss_percent = 94.0
+        stats.consultations_delivered = 50000
+        stats.average_reply_minutes = 14
+        stats.save()
+
+        faqs = [
+            (
+                "How does the online doctor consultation work?",
+                "Book a consultation, complete your assessment and meet your physician by video.",
+            ),
+            (
+                "Are the treatments authentic and regulated?",
+                "Treatments are dispensed by licensed pharmacies; your physician explains your protocol.",  # noqa: E501
+            ),
+            (
+                "What does the monthly price include?",
+                "Your programme includes physician follow-up and the medication protocol at checkout.",  # noqa: E501
+            ),
+            (
+                "How is my medication delivered?",
+                "Medication is delivered to the address you confirm during onboarding.",
+            ),
+            (
+                "Can I pause or cancel my subscription?",
+                "You can manage or cancel your subscription from your patient portal.",
+            ),
+        ]
+        for position, (question, answer) in enumerate(faqs):
+            FAQ.objects.update_or_create(
+                question=question,
+                defaults={"answer_markdown": answer, "position": position},
+            )
+        testimonials = [
+            ("Kendra L.", 5, "The process was clear and my physician was excellent."),
+            ("María G.", 5, "I finally have a plan that fits my life."),
+            ("Diego R.", 4, "The portal and follow-up made the difference."),
+        ]
+        for author_name, rating, body in testimonials:
+            Testimonial.objects.update_or_create(
+                author_name=author_name,
+                defaults={
+                    "rating": rating,
+                    "body": body,
+                    "published_at": timezone.now(),
+                    "is_published": True,
+                    "patient_consent_recorded": True,
+                },
+            )
 
         self.stdout.write(
             self.style.WARNING(

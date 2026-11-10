@@ -7,7 +7,7 @@
 
 The fixed stack requires SimpleJWT, django-allauth for Google OAuth, email
 verification and password reset. We could wire dj-rest-auth's generic endpoints,
-but the product needs enumeration-resistant registration, consent recording,
+but the product needs domain-specific registration, consent recording,
 custom email copy and a role model that dj-rest-auth does not know about.
 
 ## Decision

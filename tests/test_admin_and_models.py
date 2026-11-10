@@ -15,8 +15,7 @@ def test_email_user_creation_form_creates_usable_password() -> None:
     form = EmailUserCreationForm(
         data={
             "email": "Admin.Created@Example.com",
-            "first_name": "Ada",
-            "last_name": "Admin",
+            "full_name": "Ada Admin",
             "role": "STAFF",
             "password1": "A-very-l0ng-password!",
             "password2": "A-very-l0ng-password!",
@@ -26,6 +25,7 @@ def test_email_user_creation_form_creates_usable_password() -> None:
     user = form.save()
     assert user.email == "admin.created@example.com"
     assert user.check_password("A-very-l0ng-password!")
+    assert user.full_name == "Ada Admin"
 
 
 def test_email_user_creation_form_rejects_mismatch() -> None:
@@ -55,6 +55,7 @@ def test_superuser_manager_sets_admin_role() -> None:
 
 
 def test_user_helpers(patient_user: User, physician_user: User) -> None:
+    patient_user.full_name = ""
     patient_user.first_name = ""
     patient_user.last_name = ""
     assert patient_user.get_full_name() == patient_user.email
@@ -66,10 +67,10 @@ def test_user_helpers(patient_user: User, physician_user: User) -> None:
 def test_consent_str() -> None:
     record = ConsentRecord.objects.create(
         user=User.objects.create_user(email="c@example.com", password="A-very-l0ng-password!"),
-        document_type=ConsentRecord.DocumentType.TERMS,
+        document_type=ConsentRecord.DocumentType.TERMS_OF_SERVICE,
         version="2026-01",
     )
-    assert str(record).startswith(f"{record.user_id}:TERMS")
+    assert str(record).startswith(f"{record.user_id}:TERMS_OF_SERVICE")
 
 
 def test_immutable_consent_admin(staff_user: User) -> None:

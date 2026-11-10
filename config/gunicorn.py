@@ -22,3 +22,7 @@ accesslog = "-"
 errorlog = "-"
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(m)s %(U)s %(H)s" %(s)s %(b)s %(L)s'
 forwarded_allow_ips = os.getenv("FORWARDED_ALLOW_IPS", "127.0.0.1")
+
+# Non-root containers cannot create the default control socket in /app.
+# Operators can re-enable it with a writable path when needed.
+control_socket_disable = True

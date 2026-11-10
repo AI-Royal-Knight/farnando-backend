@@ -38,9 +38,10 @@ def test_google_existing_user_is_logged_in_without_role_change() -> None:
     adapter.get_provider.return_value.verify_token.return_value = login
 
     with patch("apps.accounts.services.get_social_adapter", return_value=adapter):
-        result = GoogleLoginService.login(request=SimpleNamespace(), id_token="credential")
+        result = GoogleLoginService.login(request=SimpleNamespace(META={}), id_token="credential")
 
-    assert result.pk == user.pk
+    assert result.user.pk == user.pk
+    assert result.is_new_user is False
     user.refresh_from_db()
     assert user.is_email_verified is True
     assert user.role == "PATIENT"
@@ -52,10 +53,18 @@ def test_google_new_user_is_created_as_patient() -> None:
     adapter.get_provider.return_value.verify_token.return_value = login
 
     with patch("apps.accounts.services.get_social_adapter", return_value=adapter):
-        result = GoogleLoginService.login(request=SimpleNamespace(), id_token="credential")
+        result = GoogleLoginService.login(
+            request=SimpleNamespace(META={}),
+            id_token="credential",
+            consents=[
+                {"document_type": "TERMS_OF_SERVICE", "version": "2026-11-01"},
+                {"document_type": "PRIVACY_POLICY", "version": "2026-11-01"},
+            ],
+        )
 
     user = User.objects.get(email="nuevo-google@example.com")
-    assert result.pk == user.pk
+    assert result.user.pk == user.pk
+    assert result.is_new_user is True
     assert user.role == "PATIENT"
     assert user.is_email_verified is True
     assert user.has_usable_password() is False
@@ -71,7 +80,7 @@ def test_google_unverified_email_is_rejected() -> None:
         patch("apps.accounts.services.get_social_adapter", return_value=adapter),
         pytest.raises(GoogleLoginError),
     ):
-        GoogleLoginService.login(request=SimpleNamespace(), id_token="credential")
+        GoogleLoginService.login(request=SimpleNamespace(META={}), id_token="credential")
     assert not User.objects.filter(email="nuevo-google@example.com").exists()
 
 
@@ -82,11 +91,11 @@ def test_google_provider_errors_are_sanitised() -> None:
         patch("apps.accounts.services.get_social_adapter", return_value=adapter),
         pytest.raises(GoogleLoginError) as exc,
     ):
-        GoogleLoginService.login(request=SimpleNamespace(), id_token="credential")
+        GoogleLoginService.login(request=SimpleNamespace(META={}), id_token="credential")
     assert "secret provider detail" not in str(exc.value)
 
 
 @override_settings(GOOGLE_CLIENT_ID="")
 def test_google_requires_configuration() -> None:
     with pytest.raises(GoogleLoginError):
-        GoogleLoginService.login(request=SimpleNamespace(), id_token="credential")
+        GoogleLoginService.login(request=SimpleNamespace(META={}), id_token="credential")

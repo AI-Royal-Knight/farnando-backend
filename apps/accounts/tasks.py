@@ -6,10 +6,9 @@ from urllib.parse import urlencode
 
 import structlog
 from django.conf import settings
-from django.contrib.auth.tokens import default_token_generator
 
 from apps.accounts.models import User
-from apps.accounts.services import encode_uid
+from apps.accounts.tokens import make_email_verification_token, make_password_reset_token
 from apps.core.email import get_email_service
 from celery import shared_task
 
@@ -41,18 +40,12 @@ def _send(*, to: str, subject: str, template: str, context: dict[str, object]) -
 
 
 def _verification_url(user: User) -> str:
-    from apps.accounts.tokens import email_verification_token
-
-    query = urlencode(
-        {"uid": encode_uid(user.pk), "token": email_verification_token.make_token(user)}
-    )
+    query = urlencode({"token": make_email_verification_token(user)})
     return f"{settings.FRONTEND_URL}/verify-email?{query}"
 
 
 def _reset_url(user: User) -> str:
-    query = urlencode(
-        {"uid": encode_uid(user.pk), "token": default_token_generator.make_token(user)}
-    )
+    query = urlencode({"token": make_password_reset_token(user)})
     return f"{settings.FRONTEND_URL}/reset-password?{query}"
 
 
@@ -67,7 +60,8 @@ def send_verification_email(self: object, user_id: str) -> None:
         subject="Verify your Adelgaceya email",
         template="email_verification",
         context={
-            "first_name": user.first_name,
+            "first_name": user.get_short_name(),
+            "full_name": user.full_name or user.get_short_name(),
             "verification_url": _verification_url(user),
             "expires_hours": settings.EMAIL_VERIFICATION_TIMEOUT // 3600,
         },
@@ -86,7 +80,8 @@ def send_password_reset_email(self: object, user_id: str) -> None:
         subject="Reset your Adelgaceya password",
         template="password_reset",
         context={
-            "first_name": user.first_name,
+            "first_name": user.get_short_name(),
+            "full_name": user.full_name or user.get_short_name(),
             "reset_url": _reset_url(user),
             "expires_hours": settings.PASSWORD_RESET_TIMEOUT // 3600,
         },
@@ -105,7 +100,8 @@ def send_account_exists_email(self: object, user_id: str) -> None:
         subject="Your Adelgaceya account",
         template="account_exists",
         context={
-            "first_name": user.first_name,
+            "first_name": user.get_short_name(),
+            "full_name": user.full_name or user.get_short_name(),
             "reset_url": _reset_url(user),
             "expires_hours": settings.PASSWORD_RESET_TIMEOUT // 3600,
         },

@@ -48,6 +48,8 @@ class UserManager(BaseUserManager):  # type: ignore[type-arg]
 class User(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True, db_index=True)
+    full_name = models.CharField(max_length=120, blank=True)
+    # Retained for admin imports/migrations; the API exposes only full_name.
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
     role = models.CharField(
@@ -75,6 +77,8 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         self.email = self.__class__.objects.normalize_email(self.email)
+        if not self.full_name:
+            self.full_name = f"{self.first_name} {self.last_name}".strip()
         super().save(*args, **kwargs)
 
     def clean(self) -> None:
@@ -84,10 +88,10 @@ class User(AbstractBaseUser, PermissionsMixin):
             raise ValidationError({"email": "An email address is required."})
 
     def get_full_name(self) -> str:
-        return f"{self.first_name} {self.last_name}".strip() or self.email
+        return self.full_name or self.email
 
     def get_short_name(self) -> str:
-        return self.first_name or self.email
+        return self.full_name.split(" ", 1)[0] if self.full_name else self.email
 
     @property
     def is_physician(self) -> bool:
@@ -100,9 +104,9 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 class ConsentRecord(models.Model):
     class DocumentType(models.TextChoices):
-        TERMS = "TERMS", "Terms and conditions"
-        PRIVACY = "PRIVACY", "Privacy policy"
-        HEALTH_DATA = "HEALTH_DATA", "Sensitive health data processing"
+        TERMS_OF_SERVICE = "TERMS_OF_SERVICE", "Terms of Service"
+        PRIVACY_POLICY = "PRIVACY_POLICY", "Privacy Policy"
+        HEALTH_DATA_PROCESSING = "HEALTH_DATA_PROCESSING", "Health data processing"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="consents")
@@ -129,3 +133,42 @@ class ConsentRecord(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user_id}:{self.document_type}:{self.version}"
+
+
+class LegalDocument(models.Model):
+    """Versioned legal copy. Published versions are immutable.
+
+    Part 5 provides the content-management workflow. Part 1 only reads the
+    current version and references its version in consent records.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    document_type = models.CharField(max_length=32, choices=ConsentRecord.DocumentType.choices)
+    version = models.CharField(max_length=32)
+    title = models.CharField(max_length=200)
+    sections = models.JSONField(default=list)
+    published_at = models.DateTimeField(default=timezone.now)
+    is_current = models.BooleanField(default=False, db_index=True)
+
+    class Meta:
+        ordering = ["document_type"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["document_type", "version"],
+                name="accounts_legal_document_unique_version",
+            ),
+            models.UniqueConstraint(
+                fields=["document_type"],
+                condition=models.Q(is_current=True),
+                name="accounts_legal_document_one_current",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["document_type", "is_current"],
+                name="accounts_legal_current_idx",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.document_type}@{self.version}"

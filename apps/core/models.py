@@ -22,3 +22,29 @@ class BaseModel(models.Model):
     class Meta:
         abstract = True
         get_latest_by = "created_at"
+
+
+class IdempotencyRecord(models.Model):
+    """Stored response for an Idempotency-Key replay window."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    key = models.UUIDField()
+    endpoint = models.CharField(max_length=200)
+    scope_hash = models.CharField(max_length=64)
+    request_hash = models.CharField(max_length=64)
+    status_code = models.PositiveSmallIntegerField()
+    response_body = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["key", "endpoint", "scope_hash"],
+                name="core_idempotency_unique_key_scope",
+            )
+        ]
+        indexes = [models.Index(fields=["expires_at"], name="core_idempotency_expiry_idx")]
+
+    def __str__(self) -> str:
+        return f"{self.endpoint}:{self.key}"

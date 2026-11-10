@@ -96,6 +96,16 @@ services:
         sync: false
       - key: SENTRY_DSN
         sync: false
+      - key: CAPTCHA_VERIFIER
+        value: apps.core.captcha.TurnstileCaptchaVerifier
+      - key: CAPTCHA_SECRET_KEY
+        sync: false
+      - key: CAPTCHA_REQUIRED
+        value: "True"
+      - key: SUPPORT_NOTIFICATION_EMAILS
+        sync: false
+      - key: COMPLAINT_RESPONSE_SLA_HOURS
+        value: "24"
       - key: WEB_CONCURRENCY
         value: "3"
 

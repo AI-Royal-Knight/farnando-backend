@@ -1,0 +1,8 @@
+Hola {{ full_name }},
+
+Registramos tu reclamo en el Libro de Reclamaciones.
+
+Número: {{ complaint_number }}
+Fecha límite de respuesta: {{ response_due_at }}
+
+Adelgaceya

@@ -1,102 +1,164 @@
-"""Input/output contracts for authentication and account lifecycle."""
+"""Request/response contracts for authentication, legal documents and consents."""
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from django.conf import settings
+from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 
-from apps.accounts.models import ConsentRecord, User
-from apps.accounts.services import decode_uid, issue_tokens
+from apps.accounts.models import ConsentRecord, LegalDocument, User
+from apps.accounts.services import AccountDisabled, ConsentService, issue_tokens
+from apps.accounts.tokens import (
+    EXPIRED,
+    parse_password_reset_token,
+)
+from apps.core.exceptions import (
+    AccountLocked,
+    ConsentRequiredInput,
+    InvalidCredentials,
+    TokenExpiredInput,
+    TokenInvalidInput,
+)
+from apps.core.serializers import StrictFieldsMixin, StrictSerializer
+
+_NAME_RE = re.compile(r"[^\W\d_]", re.UNICODE)
 
 
-class UserSerializer(serializers.ModelSerializer[User]):
+class UserSummarySerializer(serializers.ModelSerializer[User]):
+    auth_providers = serializers.SerializerMethodField()
+    assessment_status = serializers.SerializerMethodField()
+    created_at = serializers.DateTimeField(source="date_joined", read_only=True)
+
     class Meta:
         model = User
         fields = [
             "id",
             "email",
-            "first_name",
-            "last_name",
+            "full_name",
             "role",
             "is_email_verified",
-            "date_joined",
+            "auth_providers",
+            "assessment_status",
+            "created_at",
         ]
-        read_only_fields = ["id", "email", "role", "is_email_verified", "date_joined"]
+        read_only_fields = fields
+
+    def get_auth_providers(self, obj: User) -> list[str]:
+        providers: list[str] = []
+        if obj.has_usable_password():
+            providers.append("PASSWORD")
+        if SocialAccount.objects.filter(user=obj, provider="google").exists():
+            providers.append("GOOGLE")
+        return providers
+
+    def get_assessment_status(self, obj: User) -> str | None:
+        # Part 2 owns Assessment. Until then the legal value is null.
+        return None
 
 
-class ConsentSerializer(serializers.ModelSerializer[ConsentRecord]):
-    document_type_label = serializers.CharField(source="get_document_type_display", read_only=True)
+class AuthTokensSerializer(serializers.Serializer[Any]):
+    access = serializers.CharField(read_only=True)
+    refresh = serializers.CharField(read_only=True)
+
+
+class AuthResponseSerializer(serializers.Serializer[Any]):
+    user = UserSummarySerializer(read_only=True)
+    tokens = AuthTokensSerializer(read_only=True)
+
+
+class GoogleAuthResponseSerializer(AuthResponseSerializer):
+    is_new_user = serializers.BooleanField(read_only=True)
+
+
+class RefreshRequestSerializer(StrictSerializer):
+    refresh = serializers.CharField()
+
+
+class StrictTokenRefreshSerializer(StrictFieldsMixin, TokenRefreshSerializer):
+    pass
+
+
+class RefreshResponseSerializer(serializers.Serializer[Any]):
+    access = serializers.CharField(read_only=True)
+    refresh = serializers.CharField(read_only=True)
+
+
+class ConsentInputSerializer(StrictSerializer):
+    document_type = serializers.ChoiceField(choices=ConsentRecord.DocumentType.choices)
+    version = serializers.CharField(max_length=32)
+
+
+class ConsentStatusSerializer(serializers.ModelSerializer[ConsentRecord]):
+    is_current = serializers.SerializerMethodField()
 
     class Meta:
         model = ConsentRecord
-        fields = ["id", "document_type", "document_type_label", "version", "accepted_at"]
+        fields = ["document_type", "version", "accepted_at", "is_current"]
+        read_only_fields = fields
+
+    def get_is_current(self, obj: ConsentRecord) -> bool:
+        current = self.context.get("current_versions", {})
+        return bool(current.get(obj.document_type) == obj.version)
+
+
+class ConsentBatchSerializer(StrictSerializer):
+    consents = ConsentInputSerializer(many=True, allow_empty=False)
+
+
+class LegalDocumentSummarySerializer(serializers.ModelSerializer[LegalDocument]):
+    class Meta:
+        model = LegalDocument
+        fields = ["document_type", "version", "title", "published_at"]
         read_only_fields = fields
 
 
-class PaginatedConsentSerializer(serializers.Serializer[dict[str, Any]]):
-    count = serializers.IntegerField()
-    next = serializers.URLField(allow_null=True)
-    previous = serializers.URLField(allow_null=True)
-    results = ConsentSerializer(many=True)
+class LegalDocumentDetailSerializer(LegalDocumentSummarySerializer):
+    class Meta(LegalDocumentSummarySerializer.Meta):
+        fields = [*LegalDocumentSummarySerializer.Meta.fields, "sections"]
+        read_only_fields = fields
 
 
-class MeSerializer(UserSerializer):
-    consents = ConsentSerializer(many=True, read_only=True)
-
-    class Meta(UserSerializer.Meta):
-        fields = [*UserSerializer.Meta.fields, "consents"]
-
-
-class MeUpdateSerializer(serializers.ModelSerializer[User]):
-    class Meta:
-        model = User
-        fields = ["first_name", "last_name"]
-
-
-class RegisterSerializer(serializers.Serializer[dict[str, Any]]):
-    email = serializers.EmailField()
+class RegisterSerializer(StrictSerializer):
+    full_name = serializers.CharField(max_length=120, min_length=2)
+    email = serializers.EmailField(max_length=254)
     password = serializers.CharField(write_only=True, trim_whitespace=False)
-    password_confirm = serializers.CharField(write_only=True, trim_whitespace=False)
-    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
-    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
-    accept_terms = serializers.BooleanField()
-    accept_privacy = serializers.BooleanField()
+    confirm_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    consents = ConsentInputSerializer(many=True, required=False, default=list)
+
+    def validate_full_name(self, value: str) -> str:
+        trimmed = value.strip()
+        if len(trimmed) < 2 or len(trimmed) > 120 or not _NAME_RE.search(trimmed):
+            raise serializers.ValidationError("Enter a valid full name.")
+        return trimmed
 
     def validate_email(self, value: str) -> str:
         return value.strip().lower()
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        if attrs["password"] != attrs["password_confirm"]:
-            raise serializers.ValidationError({"password_confirm": "Passwords do not match."})
-        if not attrs.get("accept_terms") or not attrs.get("accept_privacy"):
-            raise serializers.ValidationError(
-                {
-                    "consents": (
-                        "You must accept the Terms of Service and the Privacy Policy "
-                        "to create an account."
-                    )
-                }
-            )
-        candidate = User(
-            email=attrs["email"],
-            first_name=attrs.get("first_name", ""),
-            last_name=attrs.get("last_name", ""),
-        )
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({"confirm_password": ["Passwords do not match."]})
+        candidate = User(email=attrs["email"], full_name=attrs["full_name"])
         try:
             validate_password(attrs["password"], candidate)
         except DjangoValidationError as exc:
             raise serializers.ValidationError({"password": list(exc.messages)}) from exc
+        if not attrs.get("consents"):
+            raise ConsentRequiredInput()
+        try:
+            ConsentService.validate_items(attrs["consents"])
+        except ConsentRequiredInput as exc:
+            raise exc
         return attrs
 
 
-class LoginSerializer(serializers.Serializer[dict[str, Any]]):
+class LoginSerializer(StrictSerializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, trim_whitespace=False)
 
@@ -105,121 +167,118 @@ class LoginSerializer(serializers.Serializer[dict[str, Any]]):
         django_request = getattr(request, "_request", request)
         email = attrs["email"].strip().lower()
         try:
-            user = authenticate(
-                request=django_request,
-                username=email,
-                password=attrs["password"],
-            )
+            user = authenticate(request=django_request, username=email, password=attrs["password"])
         except DjangoPermissionDenied as exc:
-            from apps.core.exceptions import AccountLocked
-
             raise AccountLocked() from exc
         if user is None:
-            raise AuthenticationFailed("Invalid email or password.")
-        if not user.is_active:
-            raise AuthenticationFailed("Invalid email or password.")
+            from apps.accounts.models import User as UserModel
+
+            candidate = UserModel.objects.filter(email=email).first()
+            if candidate is not None and not candidate.is_active:
+                raise AccountDisabled()
+            raise InvalidCredentials()
         self.user = user
         return attrs
 
 
-class TokenPairSerializer(serializers.Serializer[dict[str, Any]]):
-    access = serializers.CharField(read_only=True)
-    refresh = serializers.CharField(read_only=True)
-    token_type = serializers.CharField(read_only=True, default="Bearer")
-    expires_in = serializers.IntegerField(read_only=True, default=900)
+class GoogleLoginSerializer(StrictSerializer):
+    id_token = serializers.CharField()
+    consents = ConsentInputSerializer(many=True, required=False)
 
 
-class LoginResponseSerializer(TokenPairSerializer):
-    user = UserSerializer(read_only=True)
-
-
-class RefreshRequestSerializer(serializers.Serializer[dict[str, Any]]):
+class LogoutSerializer(StrictSerializer):
     refresh = serializers.CharField()
 
 
-class LogoutSerializer(serializers.Serializer[dict[str, Any]]):
-    refresh = serializers.CharField()
-
-
-class VerifyEmailSerializer(serializers.Serializer[dict[str, Any]]):
-    uid = serializers.CharField()
+class VerifyEmailSerializer(StrictSerializer):
     token = serializers.CharField()
 
 
-class ResendVerificationSerializer(serializers.Serializer[dict[str, Any]]):
-    pass
-
-
-class PasswordResetRequestSerializer(serializers.Serializer[dict[str, Any]]):
+class PasswordResetRequestSerializer(StrictSerializer):
     email = serializers.EmailField()
 
     def validate_email(self, value: str) -> str:
         return value.strip().lower()
 
 
-class PasswordResetConfirmSerializer(serializers.Serializer[dict[str, Any]]):
-    uid = serializers.CharField()
+class PasswordResetConfirmSerializer(StrictSerializer):
     token = serializers.CharField()
-    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
-    new_password_confirm = serializers.CharField(write_only=True, trim_whitespace=False)
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
+    confirm_password = serializers.CharField(write_only=True, trim_whitespace=False)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        if attrs["new_password"] != attrs["new_password_confirm"]:
-            raise serializers.ValidationError({"new_password_confirm": "Passwords do not match."})
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({"confirm_password": ["Passwords do not match."]})
+        user, status = parse_password_reset_token(attrs["token"])
+        if user is None or status not in ("valid", EXPIRED):
+            raise TokenInvalidInput()
+        if status == EXPIRED:
+            raise TokenExpiredInput()
         try:
-            user_id = decode_uid(attrs["uid"])
+            validate_password(attrs["password"], user)
         except DjangoValidationError as exc:
-            raise serializers.ValidationError(
-                {"token": "This reset link is invalid or has expired."}
-            ) from exc
-        user = User.objects.filter(pk=user_id, is_active=True).first()
-        if user is None:
-            raise serializers.ValidationError(
-                {"token": "This reset link is invalid or has expired."}
-            )
-        try:
-            validate_password(attrs["new_password"], user)
-        except DjangoValidationError as exc:
-            raise serializers.ValidationError({"new_password": list(exc.messages)}) from exc
+            raise serializers.ValidationError({"password": list(exc.messages)}) from exc
         self.user = user
         return attrs
 
 
-class GoogleLoginSerializer(serializers.Serializer[dict[str, Any]]):
-    id_token = serializers.CharField()
+class ChangePasswordSerializer(StrictSerializer):
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    confirm_password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if attrs["new_password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({"confirm_password": ["Passwords do not match."]})
+        user = self.context["request"].user
+        try:
+            validate_password(attrs["new_password"], user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"new_password": list(exc.messages)}) from exc
+        return attrs
 
 
-class ConsentCreateSerializer(serializers.Serializer[dict[str, Any]]):
-    document_type = serializers.ChoiceField(choices=ConsentRecord.DocumentType.choices)
+class MeSerializer(UserSummarySerializer):
+    pass
 
 
 def token_payload(user: User) -> dict[str, Any]:
     tokens = issue_tokens(user)
     return {
-        **tokens,
-        "token_type": "Bearer",
-        "expires_in": int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()),
-        "user": UserSerializer(user).data,
+        "user": UserSummarySerializer(user, context={"request": None}).data,
+        "tokens": tokens,
     }
 
 
+def auth_response(user: User, *, is_new_user: bool | None = None) -> dict[str, Any]:
+    payload = token_payload(user)
+    if is_new_user is not None:
+        payload["is_new_user"] = is_new_user
+    return payload
+
+
 __all__ = [
-    "ConsentCreateSerializer",
-    "ConsentSerializer",
+    "AuthResponseSerializer",
+    "AuthTokensSerializer",
+    "ChangePasswordSerializer",
+    "ConsentBatchSerializer",
+    "ConsentInputSerializer",
+    "ConsentStatusSerializer",
+    "GoogleAuthResponseSerializer",
     "GoogleLoginSerializer",
-    "LoginResponseSerializer",
+    "LegalDocumentDetailSerializer",
+    "LegalDocumentSummarySerializer",
     "LoginSerializer",
     "LogoutSerializer",
     "MeSerializer",
-    "MeUpdateSerializer",
-    "PaginatedConsentSerializer",
     "PasswordResetConfirmSerializer",
     "PasswordResetRequestSerializer",
     "RefreshRequestSerializer",
+    "RefreshResponseSerializer",
     "RegisterSerializer",
-    "ResendVerificationSerializer",
-    "TokenPairSerializer",
-    "UserSerializer",
+    "StrictTokenRefreshSerializer",
+    "UserSummarySerializer",
     "VerifyEmailSerializer",
+    "auth_response",
     "token_payload",
 ]

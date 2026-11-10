@@ -22,11 +22,17 @@ Response:
 
 ```json
 {
-  "access": "<jwt>",
-  "refresh": "<jwt>",
-  "token_type": "Bearer",
-  "expires_in": 900,
-  "user": {"id": "...", "email": "...", "role": "PATIENT", "is_email_verified": true}
+  "user": {
+    "id": "...",
+    "email": "...",
+    "full_name": "Ana Quispe",
+    "role": "PATIENT",
+    "is_email_verified": true,
+    "auth_providers": ["PASSWORD"],
+    "assessment_status": null,
+    "created_at": "2026-11-10T14:30:00Z"
+  },
+  "tokens": {"access": "<jwt>", "refresh": "<jwt>"}
 }
 ```
 
@@ -34,8 +40,9 @@ Send `Authorization: Bearer <access>`. Refresh with
 `POST /api/v1/auth/token/refresh/` (rotates and blacklists the old refresh).
 Logout blacklists the refresh token and is idempotent.
 
-Errors never reveal whether an account exists. Registration and password reset
-always return 202.
+Password reset always returns 204. Registration returns 201 on success and a
+generic 400 when the email already exists (the contract requires this, although
+it is observable; see docs/contract-deviations.md).
 
 ## Error envelope
 
@@ -61,10 +68,12 @@ Every API error:
 - Unknown `/api/` paths and unhandled API 500s use the same envelope.
 - No exception message, SQL, stack trace or PHI is returned.
 
-Common codes: `validation_error`, `authentication_required`,
-`authentication_failed`, `permission_denied`, `not_found`,
-`method_not_allowed`, `conflict`, `throttled`, `account_locked`,
-`service_unavailable`, `server_error`.
+Common codes: `validation_error`, `unknown_field`, `idempotency_key_required`,
+`not_authenticated`, `token_invalid`, `token_expired`, `invalid_credentials`,
+`account_disabled`, `permission_denied`, `email_not_verified`,
+`consent_required`, `not_found`, `method_not_allowed`, `conflict`,
+`invalid_state_transition`, `idempotency_conflict`, `file_too_large`,
+`unsupported_media_type`, `throttled`, `account_locked`, `server_error`.
 
 ## Status codes
 
@@ -72,7 +81,7 @@ Common codes: `validation_error`, `authentication_required`,
 | --- | --- |
 | 200 | Read/update success |
 | 201 | Resource created |
-| 202 | Accepted (enumeration-resistant registration/reset) |
+| 202 | Accepted (asynchronous operations) |
 | 204 | No content (logout, password reset confirm) |
 | 400 | Validation |
 | 401 | Missing/invalid credentials or token |
@@ -101,9 +110,9 @@ field ordering.
 
 `Idempotency-Key` is required on:
 
-- order creation (Phase 4)
-- payment intent creation (Phase 4)
-- assessment submission (Phase 2)
+- public complaints-book creation (Part 1)
+- assessment submission (Part 2)
+- order creation and payment intent creation (Part 4)
 
 The key is scoped to the authenticated user + endpoint + request hash. Replaying
 the same key and body returns the stored status/body; reusing a key with a
@@ -120,7 +129,17 @@ endpoint is exposed.
 - Measurements are stored in kg/cm. Display units are never trusted for
   clinical calculations.
 
-## Consents
+## Public content and legal documents
+
+`GET /legal-documents/` and `GET /legal-documents/{slug}/` return the current
+published version. `GET /consents/me/` returns the authenticated user's history;
+`POST /consents/` accepts `{"consents": [{"document_type": "...", "version": "..."}]}`
+and only current versions are accepted.
+
+Public content endpoints (`/public/*`) are anonymous and return
+`Cache-Control: public, max-age=300`. Contact and complaints-book submissions
+are throttled per IP and, where applicable, per email.
+
 
 `POST /api/v1/auth/consents/` accepts `{"document_type": "TERMS|PRIVACY|HEALTH_DATA"}`.
 The server records the **current configured version**, timestamp, IP and user

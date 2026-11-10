@@ -28,9 +28,10 @@ does not invent those rules.
   server-side, including admin-created users.
 - Login accepts email (case-insensitive, normalised to lowercase). Unknown,
   inactive and wrong-password accounts return the same 401 message.
-- **Registration and password reset do not disclose account existence.** Both
-  return 202 regardless. Existing verified addresses receive an account-exists
-  email; existing unverified addresses receive a fresh verification link.
+- Password reset does not disclose account existence (always 204). Registration
+  follows the owner-approved contract: 201 on success and a generic 400 for an
+  existing address, with an account-exists email. This is observable by design;
+  the trade-off is recorded in `docs/contract-deviations.md`.
 - Email verification is mandatory before any assessment submission (Phase 2
   permission) and is expressed by `is_email_verified`.
 - Google sign-in verifies the Google ID token with django-allauth. An email is
@@ -107,7 +108,16 @@ Production settings enforce:
   staff/admin authenticated session (or JWT).
 - `python manage.py check --deploy` must report zero warnings in CI.
 
-## 7. Uploads (Phase 2)
+## 7. Public forms
+
+Contact and complaints-book endpoints require a captcha in production. The
+verifier is a configurable port; production refuses to start if CAPTCHA is
+required but only the no-op verifier is configured. The complaints-book number
+is generated from a locked per-year sequence inside the same transaction as the
+record, and `Idempotency-Key` replay is stored so duplicate submissions do not
+consume numbers.
+
+## 8. Uploads (Phase 2)
 
 - Allow-list: PDF, PNG, JPEG. Detect by magic bytes, not extension or
   client-supplied content type.
@@ -119,7 +129,7 @@ Production settings enforce:
   files. ClamAV is a port with a Fake adapter for tests/local.
 - Filenames/content are never logged.
 
-## 8. Encryption and secrets
+## 9. Encryption and secrets
 
 - TLS everywhere; HSTS in production.
 - PostgreSQL and object storage use provider-managed encryption at rest. Buckets
@@ -135,7 +145,7 @@ Production settings enforce:
 - No secrets are baked into the Docker image. Build-time dummy values are not
   present in the runtime environment.
 
-## 9. Logging, audit and observability
+## 10. Logging, audit and observability
 
 - structlog emits JSON. Every request carries `X-Request-ID` and a structlog
   context variable; the id appears in logs and API error envelopes.
@@ -154,7 +164,7 @@ Production settings enforce:
 - Phase 2 adds an append-only `AuditLog` for every clinical read and write.
   Audit diffs are redacted for encrypted fields.
 
-## 10. Peru: Ley N.° 29733
+## 11. Peru: Ley N.° 29733
 
 **LEGAL_REVIEW:** this section records engineering intent, not legal advice.
 Counsel must confirm retention periods, consent wording, the complaints-book
@@ -162,9 +172,10 @@ fields and cross-border transfer mechanisms.
 
 Implemented/planned:
 
-- **Consent records** for Terms, Privacy Policy and sensitive health-data
+- **Consent records** for Terms of Service, Privacy Policy and health-data
   processing with document version, timestamp, IP and user agent. Versions come
-  from server configuration; clients cannot choose an outdated version.
+  from the current `LegalDocument` rows; clients cannot choose an outdated
+  version. Legal copy is seeded pending legal approval.
 - **Purpose limitation:** data is used for care delivery, scheduling, billing and
   legally required records; marketing consent is separate and not assumed.
 - **Access/export:** Phase 2 adds a data-subject export of profile, assessments,
@@ -182,7 +193,7 @@ Implemented/planned:
   notification decision and evidence preservation. **LEGAL_REVIEW:** statutory
   deadlines and authority notifications.
 
-## 11. Supply chain and CI security
+## 12. Supply chain and CI security
 
 - `uv.lock` is committed; CI and Docker use `--frozen`.
 - CI runs ruff, mypy, pytest (≥85% coverage), migration drift, OpenAPI
@@ -193,7 +204,7 @@ Implemented/planned:
 - The runtime image is multi-stage, non-root, and contains no compilers or build
   tooling.
 
-## 12. Security review checklist for every phase
+## 13. Security review checklist for every phase
 
 1. New endpoint has an explicit permission class and selector scoping.
 2. Role matrix test updated.

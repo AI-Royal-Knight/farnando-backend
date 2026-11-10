@@ -7,9 +7,13 @@ and privacy controls are treated as product features.
 
 ## Phase status
 
+API contract Part 1 (v1.1) is implemented. See `docs/contract-deviations.md`
+for the owner-review notes and `docs/open-items.md` for pending legal/content
+decisions.
+
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 1 | Foundation: settings, Docker, CI, custom user, JWT/Google auth, email verification, consent, errors, Swagger/ReDoc, WhiteNoise, health | **Complete** |
+| 1 | Foundation + API Contract Part 1: settings, Docker, CI, custom user, JWT/Google auth, email verification, legal documents, consents, public content, contact, complaints book, errors, Swagger/ReDoc, WhiteNoise, health | **Complete** |
 | 2 | Profiles, RBAC, audit log, assessments, lab uploads + antivirus | Not started |
 | 3 | Evaluations state machine, physician queue, consultations, availability, video | Not started |
 | 4 | Catalog/content, treatments/refills, orders, subscriptions, Culqi payments | Not started |
@@ -88,6 +92,7 @@ Tests run against PostgreSQL. Set `DATABASE_URL` if your local database is not
 - [API conventions](docs/api-conventions.md)
 - [ERD](docs/erd.md)
 - [ADRs](docs/decisions/)
+- [API contract deviations](docs/contract-deviations.md)
 - [Open items and TODOs](docs/open-items.md)
 - [Contributing](CONTRIBUTING.md)
 
