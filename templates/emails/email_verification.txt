@@ -1,0 +1,9 @@
+Hola {{ first_name|default:"paciente" }},
+
+Confirma tu correo para activar tu cuenta de Adelgaceya:
+
+{{ verification_url|safe }}
+
+Este enlace vence en {{ expires_hours }} horas. Si no creaste una cuenta, ignora este mensaje.
+
+Adelgaceya

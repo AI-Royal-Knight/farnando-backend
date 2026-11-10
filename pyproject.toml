@@ -1,0 +1,165 @@
+[project]
+name = "adelgaceya"
+version = "0.1.0"
+description = "Adelgaceya physician-supervised telehealth platform backend"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+authors = [{ name = "Adelgaceya" }]
+
+dependencies = [
+  # Web framework and API
+  "django==5.2.19",
+  "djangorestframework==3.18.3",
+  "drf-spectacular==0.30.0",
+  "drf-spectacular-sidecar==2026.10.1",
+  "django-filter==26.2",
+  "django-cors-headers==4.9.0",
+  # Authentication and security
+  "djangorestframework-simplejwt==5.5.1",
+  "django-allauth[socialaccount]==65.21.1",
+  "django-axes==9.0.0",
+  "argon2-cffi==25.1.0",
+  "cryptography==50.0.2",
+  "django-csp==4.0",
+  # Configuration and email
+  "django-environ==0.14.0",
+  "django-anymail==15.2",
+  # Data, storage and async
+  "psycopg[binary]==3.3.8",
+  "redis==8.1.0",
+  "celery==5.7.0",
+  "django-storages[s3]==1.14.6",
+  "boto3==1.43.127",
+  # Serving and observability
+  "gunicorn==26.2.0",
+  "whitenoise==6.12.0",
+  "structlog==26.1.0",
+  "sentry-sdk[django]==2.74.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==9.2.0",
+  "pytest-django==4.14.0",
+  "pytest-cov==7.1.0",
+  "factory-boy==3.3.3",
+  "ruff==0.17.4",
+  "mypy==1.19.1",
+  "django-stubs[compatible-mypy]==5.2.9",
+  "djangorestframework-stubs[compatible-mypy]==3.16.9",
+  "bandit==1.9.4",
+  "pip-audit==2.10.1",
+  "pre-commit==4.7.0",
+  "types-requests==2.33.0.20261030",
+  "types-pyyaml==6.0.12.20261103",
+]
+
+[tool.uv]
+package = false
+# Deterministic, reproducible installs. `uv sync --frozen` is used in CI/Docker.
+default-groups = ["dev"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+pythonpath = ["."]
+testpaths = ["tests", "apps"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-ra --strict-markers --strict-config"
+filterwarnings = ["error::django.utils.deprecation.RemovedInDjango60Warning"]
+
+[tool.coverage.run]
+source = ["apps", "config"]
+omit = [
+  "*/migrations/*",
+  "*/tests/*",
+  "tests/*",
+  "config/settings/*",
+  "config/asgi.py",
+  "config/wsgi.py",
+  "manage.py",
+]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "if settings.DEBUG:",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = [".", "apps", "config"]
+extend-exclude = ["*/migrations/*", ".venv", "staticfiles"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM", "DJ", "RUF", "S"]
+ignore = [
+  "S101",   # asserts are expected in tests
+  "SIM105", # contextlib.suppress is not always clearer
+  "RUF001", # allow Spanish punctuation in user-facing strings
+  "RUF002",
+  "RUF003",
+  "RUF012",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S", "DJ008"]
+"tests/**" = ["S", "DJ008"]
+"apps/*/migrations/*" = ["E", "F", "I", "UP", "DJ"]
+"config/settings/*" = ["S", "F403", "F405", "E501"]
+"manage.py" = ["S"]
+"docs/**" = []
+"scripts/**" = ["S"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+strict = true
+warn_unreachable = true
+warn_unused_ignores = true
+show_error_codes = true
+exclude = ["migrations/", "staticfiles/", "\\.venv/", "tests/", "apps/.*/tests/"]
+# Third-party stubs are not fully typed; do not fail on their internals.
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["*.migrations.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "apps.*.tests.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+  "config.settings.*",
+  "config.celery",
+  "config.urls",
+  "config.wsgi",
+  "config.asgi",
+  "manage",
+]
+ignore_errors = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings.test"
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "staticfiles"]
+# B104: containers must bind 0.0.0.0. B105: user-facing strings and
+# documented examples are false positives; gitleaks is the secret scanner.
+skips = ["B101", "B104", "B105"]
+
+[tool.pip-audit]
+# Dev-only advisory database can lag; runtime findings still fail CI.
+strict = false

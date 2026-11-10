@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="es">
+  <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
+    <h1 style="font-size: 20px;">Confirma tu correo</h1>
+    <p>Hola {{ first_name|default:"paciente" }},</p>
+    <p>Confirma tu correo para activar tu cuenta de Adelgaceya.</p>
+    <p><a href="{{ verification_url }}">Verificar mi correo</a></p>
+    <p>Este enlace vence en {{ expires_hours }} horas. Si no creaste una cuenta, ignora este mensaje.</p>
+    <p>Adelgaceya</p>
+  </body>
+</html>

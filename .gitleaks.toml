@@ -1,0 +1,32 @@
+# Gitleaks configuration. Test fixtures and documentation examples contain
+# clearly fake tokens; allow-list only those exact values, never whole files.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic API key"
+regex = '''(?i)(api[_-]?key|secret|token|password|authorization)["']?\s*[:=]\s*["']?([a-z0-9_\-+=/.]{16,})'''
+secretGroup = 2
+entropy = 3.5
+keywords = ["api", "key", "secret", "token", "password", "authorization"]
+
+[allowlist]
+description = "Documented development/test placeholders only"
+regexes = [
+  '''tW8uBgbY93Ih64CaqRsEIDheNMVimjTE97KQKAyVAxA=''',
+  '''correct-horse-battery''',
+  '''eyJhbGciOiJSUzI1NiIsImtpZCI6''',
+  '''eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.[A-Za-z0-9_-]+''',
+  '''build-only-not-a-secret''',
+  '''insecure-development-key-change-me''',
+  '''test-secret-key-not-for-production''',
+  '''test-google-client-secret''',
+  '''compose-only-secret-change-me''',
+  '''a-very-long-random-secret-key-for-ci-only-1234567890''',
+]
+paths = [
+  '''^\.env\.example$''',
+  '''^docs/''',
+  '''^deploy/''',
+]

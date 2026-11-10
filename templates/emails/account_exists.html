@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="es">
+  <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
+    <h1 style="font-size: 20px;">Tu cuenta de Adelgaceya</h1>
+    <p>Hola {{ first_name|default:"paciente" }},</p>
+    <p>Ya existe una cuenta asociada a este correo. Si intentabas crear una cuenta nueva, inicia sesión o restablece tu contraseña.</p>
+    <p><a href="{{ reset_url }}">Restablecer mi contraseña</a></p>
+    <p>Este enlace vence en {{ expires_hours }} horas. Si no solicitaste nada, ignora este mensaje.</p>
+    <p>Adelgaceya</p>
+  </body>
+</html>

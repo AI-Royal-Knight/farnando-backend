@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Django
+*.log
+db.sqlite3
+staticfiles/
+.staticfiles-test/
+.media-test/
+media/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Generated API artifact
+openapi.yaml
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
