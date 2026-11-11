@@ -38,6 +38,50 @@ messages.
    authenticated API request.
 8. Run `python manage.py check --deploy` in the release pipeline.
 
+### 2.1 Part 2 integrations
+
+- `LAB_SCANNER` defaults to `NoopLabScanner`, which marks every upload `CLEAN`.
+  Production **must** point it at the real ClamAV adapter before labs are
+  enabled; otherwise the scan gate is cosmetic.
+- `PAYMENT_PROVIDER` defaults to `FakePaymentProvider`. Production must use the
+  real Culqi adapter once it exists. Part 2 has no verified webhook yet, so a
+  synchronous success stays `PENDING`; do not treat it as paid.
+- Real pre-signed lab uploads require S3-compatible private storage. With
+  `FileSystemStorage` the upload URL is a dev-only media URL, not a pre-signed
+  `PUT`.
+- Limits and URL lifetimes: `LAB_UPLOAD_MAX_BYTES` (10 MB),
+  `LAB_UPLOAD_URL_TTL_SECONDS` (900), `LAB_DOWNLOAD_URL_TTL_SECONDS` (300).
+- Watch the `scan_lab_upload` queue. Uploads stay `SCANNING` until the worker
+  finishes; a stuck queue blocks physician visibility and lab submission.
+
+### 2.2 Part 3 integrations
+
+- Set `CULQI_WEBHOOK_SECRET` and `DAILY_WEBHOOK_SECRET`; without them every
+  webhook is rejected with `401`. Register `https://<api>/api/v1/webhooks/culqi/`
+  and `https://<api>/api/v1/webhooks/video/daily/` with the providers.
+- Point `PAYMENT_PROVIDER` and `VIDEO_PROVIDER` at the real adapters once
+  implemented (both currently return `503`).
+- Run Celery beat (one replica): `run_consultation_jobs` (5 min) and
+  `run_subscription_jobs` (15 min).
+- Load the full INEI table: `python manage.py load_ubigeo ubigeo.csv`
+  (`code,name[,is_deliverable]`), then review delivery coverage in the admin.
+- Failed webhook processing is kept on `WebhookEvent.processing_error`
+  (admin, read-only). Fix the cause and replay by asking the provider to resend.
+- Care-team data (clinician profiles, availability, nurse assignment, packages,
+  products) is maintained in the Django admin until Parts 4 and 5.
+
+### 2.3 Part 4 operations
+
+- Invite a physician: admin → Physician invitations → Add. The token is shown
+  once; send the link `<frontend>/physician-invitations/<token>`.
+- Verify credentials: admin → Clinician profiles → set `verification_status`
+  (the physician is notified).
+- Configure `Program.allowed_specialties` and product guardrails before launch
+  (`[MEDICAL REVIEW]`).
+- Beat must run `run_clinical_jobs` (claims and dose versions).
+- With MFA enforced, every staff/admin/physician account (including demo
+  accounts) must enrol on first login.
+
 ## 3. Migrations policy (expand/contract)
 
 Never combine a destructive schema change with the code that stops using the

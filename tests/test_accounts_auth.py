@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 from typing import Any
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from axes.models import AccessAttempt
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.cache import cache
+from django.test import override_settings
 from rest_framework.test import APIClient
 
 from apps.accounts.models import ConsentRecord, User
@@ -192,6 +196,10 @@ def test_resend_verification(
     django_capture_on_commit_callbacks: Any,
 ) -> None:
     client = make_auth_client(unverified_user)
+    unknown_field = client.post(RESEND_URL, {"unexpected": True}, format="json")
+    assert unknown_field.status_code == 400
+    assert unknown_field.json()["code"] == "unknown_field"
+
     with django_capture_on_commit_callbacks(execute=True):
         response = client.post(RESEND_URL, {}, format="json")
     assert response.status_code == 204
@@ -345,6 +353,34 @@ def test_auth_throttle_returns_envelope_and_retry_after(api_client: APIClient) -
     assert throttled.status_code == 429
     assert throttled.json()["code"] == "throttled"
     assert throttled["Retry-After"]
+
+
+def test_axes_lockout_returns_account_locked_envelope(api_client: APIClient) -> None:
+    AccessAttempt.objects.all().delete()
+    payload = {"email": "locked@example.com", "password": "wrong-password"}
+
+    with override_settings(
+        AXES_ENABLED=True,
+        AXES_FAILURE_LIMIT=5,
+        AXES_COOLOFF_TIME=timedelta(minutes=15),
+    ):
+        response = None
+        for _ in range(5):
+            # Clear only the DRF throttle so axes' database-backed lockout is
+            # the behaviour under test.
+            cache.clear()
+            response = api_client.post(LOGIN_URL, payload, format="json")
+
+        assert response is not None
+        assert response.status_code == 429
+        assert response.json()["code"] == "account_locked"
+        assert response["Retry-After"] == "900"
+        assert response.json()["request_id"] == response["X-Request-ID"]
+
+        cache.clear()
+        locked = api_client.post(LOGIN_URL, payload, format="json")
+        assert locked.status_code == 429
+        assert locked.json()["code"] == "account_locked"
 
 
 def test_request_id_propagation_and_error_envelope(api_client: APIClient) -> None:

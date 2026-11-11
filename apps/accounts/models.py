@@ -12,6 +12,7 @@ from django.db import models
 from django.utils import timezone
 
 from apps.accounts.enums import Role
+from apps.core.encryption import EncryptedTextField
 
 
 class UserManager(BaseUserManager):  # type: ignore[type-arg]
@@ -107,6 +108,7 @@ class ConsentRecord(models.Model):
         TERMS_OF_SERVICE = "TERMS_OF_SERVICE", "Terms of Service"
         PRIVACY_POLICY = "PRIVACY_POLICY", "Privacy Policy"
         HEALTH_DATA_PROCESSING = "HEALTH_DATA_PROCESSING", "Health data processing"
+        CLINICIAN_AGREEMENT = "CLINICIAN_AGREEMENT", "Clinician agreement"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="consents")
@@ -172,3 +174,42 @@ class LegalDocument(models.Model):
 
     def __str__(self) -> str:
         return f"{self.document_type}@{self.version}"
+
+
+class MfaDevice(models.Model):
+    """One TOTP authenticator per user. ``confirmed_at`` marks MFA as enabled."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="mfa_device")
+    secret = EncryptedTextField()
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    last_used_step = models.BigIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"mfa:{self.user_id}"
+
+
+class MfaBackupCode(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mfa_backup_codes")
+    code_hash = models.CharField(max_length=64)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return f"backup:{self.user_id}"
+
+
+class MfaChallenge(models.Model):
+    """Short-lived, single-purpose login challenge (``mfa_token``)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mfa_challenges")
+    token_hash = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    failed_attempts = models.PositiveSmallIntegerField(default=0)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"challenge:{self.user_id}"

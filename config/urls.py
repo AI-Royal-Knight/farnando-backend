@@ -44,6 +44,15 @@ urlpatterns = [
     path("api/v1/", include("apps.accounts.urls")),
     path("api/v1/", include("apps.catalog.urls")),
     path("api/v1/", include("apps.support.urls")),
+    path("api/v1/", include("apps.assessments.urls")),
+    path("api/v1/", include("apps.patients.urls")),
+    path("api/v1/", include("apps.consultations.urls")),
+    path("api/v1/", include("apps.treatments.urls")),
+    path("api/v1/", include("apps.orders.urls")),
+    path("api/v1/", include("apps.payments.urls")),
+    path("api/v1/", include("apps.messaging.urls")),
+    path("api/v1/", include("apps.notifications.urls")),
+    path("api/v1/", include("apps.clinical.urls")),
 ]
 
 if settings.DEBUG:

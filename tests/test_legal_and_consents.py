@@ -16,11 +16,12 @@ def test_legal_document_list_returns_current_versions(client: APIClient) -> None
     response = client.get("/api/v1/legal-documents/")
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload) == 3
+    assert len(payload) == 4
     assert {item["document_type"] for item in payload} == {
         "TERMS_OF_SERVICE",
         "PRIVACY_POLICY",
         "HEALTH_DATA_PROCESSING",
+        "CLINICIAN_AGREEMENT",
     }
     assert all(item["version"] == VERSION for item in payload)
     assert "public" in response["Cache-Control"]

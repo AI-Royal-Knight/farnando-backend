@@ -32,8 +32,9 @@ does not invent those rules.
   follows the owner-approved contract: 201 on success and a generic 400 for an
   existing address, with an account-exists email. This is observable by design;
   the trade-off is recorded in `docs/contract-deviations.md`.
-- Email verification is mandatory before any assessment submission (Phase 2
-  permission) and is expressed by `is_email_verified`.
+- Email verification is mandatory before any assessment submission (enforced in
+  Part 2) and is expressed by `is_email_verified`. Assessment create/submit also
+  require current Terms, Privacy and health-data consent.
 - Google sign-in verifies the Google ID token with django-allauth. An email is
   only linked when Google marks it verified; otherwise login is rejected.
 - **LEGAL_REVIEW:** whether physicians/staff require MFA is a policy decision.
@@ -50,8 +51,9 @@ does not invent those rules.
   evaluations; staff permissions are explicit; admin is full-access.
 - Serializers mark role, ownership, price, status, BMI and computed fields
   read-only. Updates go through services with explicit allowed transitions.
-- A role × endpoint matrix test is required in Phase 2 and grows with every
-  endpoint. List endpoints must have query-count tests.
+- A role × endpoint matrix test is required and grows with every endpoint. Part
+  2 has targeted role tests; the full matrix is still a `TODO(phase-2)`. List
+  endpoints must have query-count tests.
 - Staff/admin Django admin access requires `is_staff`; the API uses roles and
   `is_staff` only for docs/admin.
 
@@ -83,7 +85,11 @@ does not invent those rules.
 | `auth` | 5/min |
 | `password_reset` | 3/hour |
 | `email_verification` | 3/hour |
-| `upload` | 20/hour (Phase 2) |
+| `assessment_create` | 20/hour |
+| `assessment_measurements` | 120/min |
+| `assessment_submit` | 5/hour |
+| `assessment_payment` | 5/hour |
+| `lab_upload` | 20/hour |
 | `messaging` | 60/min (Phase 5) |
 
 Rates are configurable by environment. Throttle keys include the user id when
@@ -117,17 +123,49 @@ is generated from a locked per-year sequence inside the same transaction as the
 record, and `Idempotency-Key` replay is stored so duplicate submissions do not
 consume numbers.
 
-## 8. Uploads (Phase 2)
+## 8. Uploads (Part 2)
 
 - Allow-list: PDF, PNG, JPEG. Detect by magic bytes, not extension or
   client-supplied content type.
-- Maximum 10 MB, enforced by DRF parser and storage validation.
+- Maximum 10 MB per file and 5 active uploads per assessment.
 - Randomised object keys; original filenames are never used as keys.
-- Private bucket, no public ACLs. Downloads via pre-signed URLs valid for five
-  minutes.
-- `PENDING_SCAN → CLEAN | REJECTED`. Physicians cannot see pending/rejected
-  files. ClamAV is a port with a Fake adapter for tests/local.
-- Filenames/content are never logged.
+- Private bucket, no public ACLs. Upload URLs expire after 15 minutes; downloads
+  via pre-signed URLs valid for five minutes.
+- `PENDING_UPLOAD → SCANNING → CLEAN | REJECTED`. Physicians cannot see
+  pending/rejected files. The scanner is a port; `NoopLabScanner` is local/test
+  only and production must configure ClamAV.
+- Every lab download is written to `AuditLog`. Filenames/content are never
+  logged.
+
+## 8.1 Payments, webhooks and messaging (Part 3)
+
+- Card data never reaches the API: only provider tokens in and
+  `brand/last4/expiry` out. Saved cards are provider references.
+- Webhooks verify an HMAC-SHA256 signature over the raw body before parsing;
+  with no secret configured every request is rejected (`401`). Bodies are
+  capped at 256 KB (`413 payload_too_large`). Events are stored immutably and
+  deduplicated by provider event id; invalid signatures are logged.
+- Message bodies, consultation notes and reasons, order notes and billing
+  details are encrypted at rest (`EncryptedTextField`).
+- Notification titles, bodies and emails never contain diagnoses, medication
+  names, lab values or message text.
+- Admin reads of another patient's consultations, treatments, orders,
+  payments or messages are audited; physicians and staff use Part 4/5 paths.
+- Video rooms are per consultation, tokens are per participant and expire when
+  the join window closes; recording is off.
+
+## 8.2 Clinician access (Part 4)
+
+- MFA (TOTP) is mandatory for `MFA_REQUIRED_ROLES`; unenrolled clinical
+  accounts can only enrol. Secrets are encrypted, backup codes and login
+  challenges are hashed, and a challenge locks after 5 wrong codes.
+- Invitation tokens are random, single-use and stored hashed.
+- Physicians only reach patients through a care relationship; anything else is
+  `404`. Queue items show minimum data until claimed. Packets, charts, notes,
+  consultation reads and downloads by non-owners are audited.
+- Clinical notes are append-only; internal notes and rejection rationale are
+  encrypted and never returned to patients.
+- Avatars are decoded and re-encoded without metadata; uploads are size-capped.
 
 ## 9. Encryption and secrets
 
@@ -161,8 +199,9 @@ consume numbers.
   no data leaves the process.
 - Celery task arguments contain UUIDs only. Email delivery errors are converted
   to a sanitised exception so recipient addresses do not appear in tracebacks.
-- Phase 2 adds an append-only `AuditLog` for every clinical read and write.
-  Audit diffs are redacted for encrypted fields.
+- `AuditLog` is append-only and records non-owner clinical reads plus every lab
+  and prescription download: actor, action, object type/id, request id, IP,
+  user agent and redacted metadata. It does not store clinical values.
 
 ## 11. Peru: Ley N.° 29733
 
@@ -178,15 +217,18 @@ Implemented/planned:
   version. Legal copy is seeded pending legal approval.
 - **Purpose limitation:** data is used for care delivery, scheduling, billing and
   legally required records; marketing consent is separate and not assumed.
-- **Access/export:** Phase 2 adds a data-subject export of profile, assessments,
-  labs, evaluations, prescriptions, messages and consents (machine-readable).
+- **Access/export:** `TODO(phase-2)`: a data-subject export of profile,
+  assessments, labs, evaluations, prescriptions, messages and consents
+  (machine-readable). Part 2 stores the data but does not expose an export.
 - **Rectification:** profile correction endpoints plus a staff-reviewed request
-  flow for clinical records.
+  flow for clinical records. `TODO(phase-2/3)`.
 - **Deletion/anonymisation:** a workflow that removes direct identifiers while
   preserving legally required financial/clinical records in de-identified form.
   Hard deletion is used where no retention obligation applies.
+  `TODO(phase-2/3)`.
 - **Retention:** configurable per data class; defaults must be approved by
-  counsel. Backups follow the same retention and are purged on schedule.
+  counsel. Lab-file retention is still `[LEGAL_REVIEW]`. Backups follow the same
+  retention and are purged on schedule.
 - **Cross-border transfers:** infrastructure region and ESP/Sentry processing
   locations must be reviewed and documented before production launch.
 - **Breach response:** runbook covers containment, impact assessment,

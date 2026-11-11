@@ -34,6 +34,7 @@ _NAME_RE = re.compile(r"[^\W\d_]", re.UNICODE)
 class UserSummarySerializer(serializers.ModelSerializer[User]):
     auth_providers = serializers.SerializerMethodField()
     assessment_status = serializers.SerializerMethodField()
+    mfa_enabled = serializers.SerializerMethodField()
     created_at = serializers.DateTimeField(source="date_joined", read_only=True)
 
     class Meta:
@@ -46,9 +47,15 @@ class UserSummarySerializer(serializers.ModelSerializer[User]):
             "is_email_verified",
             "auth_providers",
             "assessment_status",
+            "mfa_enabled",
             "created_at",
         ]
         read_only_fields = fields
+
+    def get_mfa_enabled(self, obj: User) -> bool:
+        from apps.accounts.mfa import mfa_enabled
+
+        return mfa_enabled(obj)
 
     def get_auth_providers(self, obj: User) -> list[str]:
         providers: list[str] = []
@@ -59,8 +66,16 @@ class UserSummarySerializer(serializers.ModelSerializer[User]):
         return providers
 
     def get_assessment_status(self, obj: User) -> str | None:
-        # Part 2 owns Assessment. Until then the legal value is null.
-        return None
+        if obj.role != "PATIENT":
+            return None
+        from apps.assessments.models import Assessment
+
+        return (
+            Assessment.objects.filter(user=obj)
+            .order_by("-created_at")
+            .values_list("status", flat=True)
+            .first()
+        )
 
 
 class AuthTokensSerializer(serializers.Serializer[Any]):
@@ -194,6 +209,12 @@ class VerifyEmailSerializer(StrictSerializer):
     token = serializers.CharField()
 
 
+class EmptyBodySerializer(StrictSerializer):
+    """Reject unexpected fields on endpoints that take no request body."""
+
+    pass
+
+
 class PasswordResetRequestSerializer(StrictSerializer):
     email = serializers.EmailField()
 
@@ -251,6 +272,10 @@ def token_payload(user: User) -> dict[str, Any]:
 
 
 def auth_response(user: User, *, is_new_user: bool | None = None) -> dict[str, Any]:
+    from apps.accounts.mfa import create_challenge, mfa_enabled
+
+    if mfa_enabled(user) and not is_new_user:
+        return create_challenge(user)
     payload = token_payload(user)
     if is_new_user is not None:
         payload["is_new_user"] = is_new_user
@@ -264,6 +289,7 @@ __all__ = [
     "ConsentBatchSerializer",
     "ConsentInputSerializer",
     "ConsentStatusSerializer",
+    "EmptyBodySerializer",
     "GoogleAuthResponseSerializer",
     "GoogleLoginSerializer",
     "LegalDocumentDetailSerializer",
@@ -282,3 +308,32 @@ __all__ = [
     "auth_response",
     "token_payload",
 ]
+
+
+class MfaChallengeSerializer(serializers.Serializer[Any]):
+    mfa_required = serializers.BooleanField()
+    mfa_token = serializers.CharField()
+    methods = serializers.ListField(child=serializers.CharField())
+
+
+class MfaVerifySerializer(StrictSerializer):
+    mfa_token = serializers.CharField(max_length=200)
+    code = serializers.CharField(max_length=20)
+
+
+class MfaCodeSerializer(StrictSerializer):
+    code = serializers.CharField(max_length=20)
+
+
+class MfaDisableSerializer(StrictSerializer):
+    password = serializers.CharField(trim_whitespace=False)
+    code = serializers.CharField(max_length=20)
+
+
+class MfaSetupSerializer(serializers.Serializer[Any]):
+    secret = serializers.CharField()
+    otpauth_uri = serializers.CharField()
+
+
+class MfaBackupCodesSerializer(serializers.Serializer[Any]):
+    backup_codes = serializers.ListField(child=serializers.CharField())

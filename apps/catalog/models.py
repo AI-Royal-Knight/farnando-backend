@@ -16,6 +16,13 @@ class SiteSettings(models.Model):
     address = models.TextField(blank=True)
     social_links = models.JSONField(default=list)
     legal_entity_name = models.CharField(max_length=200, blank=True)
+    messaging_safety_notice = models.TextField(
+        default=(
+            "Messages are not monitored 24/7. In an emergency contact local "
+            "emergency services (SAMU 106)."
+        ),
+        help_text="[MEDICAL REVIEW] wording and emergency numbers.",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

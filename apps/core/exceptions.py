@@ -21,6 +21,10 @@ class ApplicationError(exceptions.APIException):
     default_detail = "The request could not be processed."
     default_code = "application_error"
 
+    def __init__(self, detail: Any = None, *, details: Any = None) -> None:
+        super().__init__(detail)
+        self.details_payload = details
+
 
 class Conflict(ApplicationError):
     status_code = status.HTTP_409_CONFLICT
@@ -129,6 +133,207 @@ class FileTooLarge(ApplicationError):
     default_code = "file_too_large"
 
 
+class PaymentFailed(ApplicationError):
+    status_code = status.HTTP_402_PAYMENT_REQUIRED
+    default_detail = "The payment was declined. Try again with a new token."
+    default_code = "payment_failed"
+
+
+class AssessmentLocked(ApplicationError):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This assessment is no longer editable."
+    default_code = "assessment_locked"
+
+
+class AssessmentIncomplete(ApplicationError):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "The assessment is not complete."
+    default_code = "assessment_incomplete"
+
+
+class UploadLimitReached(ApplicationError):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "The maximum number of lab files has been reached."
+    default_code = "upload_limit_reached"
+
+
+class NoLabFiles(ApplicationError):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Upload at least one lab file first."
+    default_code = "no_lab_files"
+
+
+class TargetWeightInvalid(ApplicationError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "The target weight must be lower than the current weight."
+    default_code = "target_weight_invalid"
+
+
+class TargetBelowHealthyRange(ApplicationError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "The target weight is below a healthy BMI range."
+    default_code = "target_below_healthy_range"
+
+
+class UnderAge(ApplicationError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "Patients must be 18 or older."
+    default_code = "under_age"
+
+
+class ReadOnlyField(ApplicationError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "This field is read-only."
+    default_code = "read_only_field"
+
+    def __init__(self, field: str) -> None:
+        super().__init__(self.default_detail, details={field: ["This field is read-only."]})
+
+
+class UnsupportedDeliveryArea(ApplicationError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "Delivery is not available for this address."
+    default_code = "unsupported_delivery_area"
+
+
+class EvaluationRequired(ApplicationError):
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = "A paid or waived evaluation is required."
+    default_code = "evaluation_required"
+
+
+class NotInCareTeam(ApplicationError):
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = "This person is not part of your care team."
+    default_code = "not_in_care_team"
+
+
+class AddressInUse(ApplicationError):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This address is used by an open order or an active subscription."
+    default_code = "address_in_use"
+
+
+class SlotUnavailable(ApplicationError):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This time slot is no longer available."
+    default_code = "slot_unavailable"
+
+
+class TooLateToChange(ApplicationError):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "It is too late to change this consultation."
+    default_code = "too_late_to_change"
+
+
+class JoinWindowClosed(ApplicationError):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "The video call is not open right now."
+    default_code = "join_window_closed"
+
+
+class NoRefillsRemaining(ApplicationError):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "No refills remain. Request a renewal from your physician."
+    default_code = "no_refills_remaining"
+
+
+class CancelNotAllowed(ApplicationError):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This order can no longer be cancelled. Contact support."
+    default_code = "cancel_not_allowed"
+
+
+class PaymentMethodInUse(ApplicationError):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This card is the only payment method of an active subscription."
+    default_code = "payment_method_in_use"
+
+
+class PayloadTooLarge(ApplicationError):
+    status_code = status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+    default_detail = "The request body is too large."
+    default_code = "payload_too_large"
+
+
+class CredentialsNotVerified(ApplicationError):
+    status_code = 403
+    default_detail = "Your medical credentials have not been verified yet."
+    default_code = "credentials_not_verified"
+
+
+class MfaEnrollmentRequired(ApplicationError):
+    status_code = 403
+    default_detail = "Set up two-factor authentication to continue."
+    default_code = "mfa_enrollment_required"
+
+
+class ClaimRequired(ApplicationError):
+    status_code = 403
+    default_detail = "Claim this evaluation before opening it."
+    default_code = "claim_required"
+
+
+class AlreadyClaimed(ApplicationError):
+    status_code = 409
+    default_detail = "Another physician is already reviewing this evaluation."
+    default_code = "already_claimed"
+
+
+class OverlappingRule(ApplicationError):
+    status_code = 409
+    default_detail = "This availability overlaps another rule on the same day."
+    default_code = "overlapping_rule"
+
+
+class ConflictsWithConsultations(ApplicationError):
+    status_code = 409
+    default_detail = "This change conflicts with booked consultations."
+    default_code = "conflicts_with_consultations"
+
+
+class PreconditionFailed(ApplicationError):
+    status_code = 412
+    default_detail = "The record changed since you loaded it. Reload and try again."
+    default_code = "precondition_failed"
+
+
+class PreconditionRequired(ApplicationError):
+    status_code = 428
+    default_detail = "The If-Match header is required."
+    default_code = "precondition_required"
+
+
+class FlagsNotAcknowledged(ApplicationError):
+    status_code = 400
+    default_detail = "Acknowledge every flagged answer before approving."
+    default_code = "flags_not_acknowledged"
+
+
+class DoseOutOfRange(ApplicationError):
+    status_code = 400
+    default_detail = "This dose is not allowed for the product."
+    default_code = "dose_out_of_range"
+
+
+class InvitationExpired(ApplicationError):
+    status_code = 410
+    default_detail = "This invitation has expired."
+    default_code = "invitation_expired"
+
+
+class InvitationRevoked(ApplicationError):
+    status_code = 410
+    default_detail = "This invitation was revoked."
+    default_code = "invitation_revoked"
+
+
+class InvitationAlreadyUsed(ApplicationError):
+    status_code = 410
+    default_detail = "This invitation was already used."
+    default_code = "invitation_already_used"
+
+
 _STATUS_CODES = {
     status.HTTP_400_BAD_REQUEST: "validation_error",
     status.HTTP_401_UNAUTHORIZED: "not_authenticated",
@@ -137,6 +342,9 @@ _STATUS_CODES = {
     status.HTTP_405_METHOD_NOT_ALLOWED: "method_not_allowed",
     status.HTTP_406_NOT_ACCEPTABLE: "not_acceptable",
     status.HTTP_409_CONFLICT: "conflict",
+    status.HTTP_410_GONE: "gone",
+    status.HTTP_412_PRECONDITION_FAILED: "precondition_failed",
+    status.HTTP_428_PRECONDITION_REQUIRED: "precondition_required",
     status.HTTP_413_REQUEST_ENTITY_TOO_LARGE: "file_too_large",
     status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: "unsupported_media_type",
     status.HTTP_429_TOO_MANY_REQUESTS: "throttled",
@@ -163,6 +371,39 @@ _DEFAULT_MESSAGES = {
     "invalid_state_transition": "The requested state transition is not allowed.",
     "idempotency_conflict": "The idempotency key was already used with a different request.",
     "file_too_large": "The uploaded file is too large.",
+    "payment_failed": "The payment was declined. Try again with a new token.",
+    "assessment_locked": "This assessment is no longer editable.",
+    "assessment_incomplete": "The assessment is not complete.",
+    "upload_limit_reached": "The maximum number of lab files has been reached.",
+    "no_lab_files": "Upload at least one lab file first.",
+    "target_weight_invalid": "The target weight must be lower than the current weight.",
+    "target_below_healthy_range": "The target weight is below a healthy BMI range.",
+    "under_age": "Patients must be 18 or older.",
+    "read_only_field": "This field is read-only.",
+    "unsupported_delivery_area": "Delivery is not available for this address.",
+    "evaluation_required": "A paid or waived evaluation is required.",
+    "not_in_care_team": "This person is not part of your care team.",
+    "address_in_use": "This address is used by an open order or an active subscription.",
+    "slot_unavailable": "This time slot is no longer available.",
+    "too_late_to_change": "It is too late to change this consultation.",
+    "join_window_closed": "The video call is not open right now.",
+    "no_refills_remaining": "No refills remain. Request a renewal from your physician.",
+    "cancel_not_allowed": "This order can no longer be cancelled. Contact support.",
+    "payment_method_in_use": "This card is the only payment method of an active subscription.",
+    "payload_too_large": "The request body is too large.",
+    "credentials_not_verified": "Your medical credentials have not been verified yet.",
+    "mfa_enrollment_required": "Set up two-factor authentication to continue.",
+    "claim_required": "Claim this evaluation before opening it.",
+    "already_claimed": "Another physician is already reviewing this evaluation.",
+    "overlapping_rule": "This availability overlaps another rule on the same day.",
+    "conflicts_with_consultations": "This change conflicts with booked consultations.",
+    "precondition_failed": "The record changed since you loaded it. Reload and try again.",
+    "precondition_required": "The If-Match header is required.",
+    "flags_not_acknowledged": "Acknowledge every flagged answer before approving.",
+    "dose_out_of_range": "This dose is not allowed for the product.",
+    "invitation_expired": "This invitation has expired.",
+    "invitation_revoked": "This invitation was revoked.",
+    "invitation_already_used": "This invitation was already used.",
     "unsupported_media_type": "Unsupported media type.",
     "throttled": "Request was throttled.",
     "service_unavailable": "The service is temporarily unavailable.",
@@ -245,6 +486,39 @@ _MESSAGES_ES = {
     "invalid_state_transition": "La transición de estado no está permitida.",
     "idempotency_conflict": "La clave de idempotencia ya se usó con otra solicitud.",
     "file_too_large": "El archivo es demasiado grande.",
+    "payment_failed": "El pago fue rechazado. Inténtalo de nuevo con un token nuevo.",
+    "assessment_locked": "Esta evaluación ya no se puede editar.",
+    "assessment_incomplete": "La evaluación no está completa.",
+    "upload_limit_reached": "Se alcanzó el número máximo de archivos de laboratorio.",
+    "no_lab_files": "Sube al menos un archivo de laboratorio primero.",
+    "target_weight_invalid": "El peso objetivo debe ser menor que el peso actual.",
+    "target_below_healthy_range": "El peso objetivo está por debajo de un rango de IMC saludable.",
+    "under_age": "Los pacientes deben tener 18 años o más.",
+    "read_only_field": "Este campo es de solo lectura.",
+    "unsupported_delivery_area": "No hay entregas disponibles para esta dirección.",
+    "evaluation_required": "Se requiere una evaluación pagada o exonerada.",
+    "not_in_care_team": "Esta persona no forma parte de tu equipo de atención.",
+    "address_in_use": "Esta dirección está en uso por un pedido abierto o una suscripción activa.",
+    "slot_unavailable": "Este horario ya no está disponible.",
+    "too_late_to_change": "Ya es demasiado tarde para cambiar esta consulta.",
+    "join_window_closed": "La videollamada no está abierta en este momento.",
+    "no_refills_remaining": "No quedan recargas. Solicita una renovación a tu médico.",
+    "cancel_not_allowed": "Este pedido ya no se puede cancelar. Contacta a soporte.",
+    "payment_method_in_use": "Esta tarjeta es el único método de pago de una suscripción activa.",
+    "payload_too_large": "El cuerpo de la solicitud es demasiado grande.",
+    "credentials_not_verified": "Tus credenciales médicas aún no han sido verificadas.",
+    "mfa_enrollment_required": "Configura la autenticación de dos factores para continuar.",
+    "claim_required": "Toma esta evaluación antes de abrirla.",
+    "already_claimed": "Otro médico ya está revisando esta evaluación.",
+    "overlapping_rule": "Esta disponibilidad se superpone con otra regla del mismo día.",
+    "conflicts_with_consultations": "Este cambio entra en conflicto con consultas reservadas.",
+    "precondition_failed": "El registro cambió. Recarga e inténtalo de nuevo.",
+    "precondition_required": "El encabezado If-Match es obligatorio.",
+    "flags_not_acknowledged": "Confirma todas las respuestas marcadas antes de aprobar.",
+    "dose_out_of_range": "Esta dosis no está permitida para el producto.",
+    "invitation_expired": "Esta invitación ha expirado.",
+    "invitation_revoked": "Esta invitación fue revocada.",
+    "invitation_already_used": "Esta invitación ya fue utilizada.",
     "unsupported_media_type": "Tipo de contenido no soportado.",
     "throttled": "La solicitud fue limitada.",
     "service_unavailable": "El servicio no está disponible temporalmente.",
@@ -270,6 +544,8 @@ def _message(exc: Exception, code: str) -> str:
 
 
 def _details(exc: Exception, data: Any, code: str) -> Any:
+    if isinstance(exc, ApplicationError) and exc.details_payload is not None:
+        return exc.details_payload
     if code == "unknown_field" and isinstance(exc, UnknownField):
         return {exc.field: ["Unknown field."]}
     if code == "validation_error":

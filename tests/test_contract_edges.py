@@ -71,9 +71,11 @@ def test_user_summary_contains_contract_fields(patient_user) -> None:
         "is_email_verified",
         "auth_providers",
         "assessment_status",
+        "mfa_enabled",
         "created_at",
     }
     assert payload["assessment_status"] is None
+    assert payload["mfa_enabled"] is False
     assert payload["auth_providers"] == ["PASSWORD"]
 
 

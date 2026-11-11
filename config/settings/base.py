@@ -63,6 +63,15 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.catalog.apps.CatalogConfig",
     "apps.support.apps.SupportConfig",
+    "apps.assessments.apps.AssessmentsConfig",
+    "apps.patients.apps.PatientsConfig",
+    "apps.consultations.apps.ConsultationsConfig",
+    "apps.treatments.apps.TreatmentsConfig",
+    "apps.payments.apps.PaymentsConfig",
+    "apps.orders.apps.OrdersConfig",
+    "apps.messaging.apps.MessagingConfig",
+    "apps.notifications.apps.NotificationsConfig",
+    "apps.clinical.apps.ClinicalConfig",
 ]
 
 MIDDLEWARE = [
@@ -188,6 +197,11 @@ AXES_RESET_ON_SUCCESS = True
 AXES_HTTP_RESPONSE_CODE = 429
 AXES_ENABLE_ADMIN = True
 AXES_ENABLED = env.bool("AXES_ENABLED", default=True)
+# Use the API error envelope for lockouts and keep the cool-off anchored to the
+# first lockout so repeated attempts cannot extend it.
+AXES_LOCKOUT_CALLABLE = "apps.accounts.lockout.axes_lockout_response"
+AXES_ENABLE_RETRY_AFTER_HEADER = True
+AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
 
 # Allauth is used as the social-login engine (Google ID token verification).
 ACCOUNT_LOGIN_METHODS = {"email"}
@@ -256,6 +270,16 @@ REST_FRAMEWORK = {
         "contact_email": env("THROTTLE_CONTACT_EMAIL", default="3/hour"),
         "complaint": env("THROTTLE_COMPLAINT", default="5/hour"),
         "complaint_status": env("THROTTLE_COMPLAINT_STATUS", default="10/hour"),
+        "assessment_create": env("THROTTLE_ASSESSMENT_CREATE", default="20/hour"),
+        "assessment_measurements": env("THROTTLE_ASSESSMENT_MEASUREMENTS", default="120/min"),
+        "assessment_submit": env("THROTTLE_ASSESSMENT_SUBMIT", default="5/hour"),
+        "assessment_payment": env("THROTTLE_ASSESSMENT_PAYMENT", default="5/hour"),
+        "lab_upload": env("THROTTLE_LAB_UPLOAD", default="20/hour"),
+        "consultation_create": env("THROTTLE_CONSULTATION_CREATE", default="10/hour"),
+        "order_create": env("THROTTLE_ORDER_CREATE", default="5/hour"),
+        "invitation_lookup": env("THROTTLE_INVITATION_LOOKUP", default="20/hour"),
+        "invitation_accept": env("THROTTLE_INVITATION_ACCEPT", default="5/hour"),
+        "avatar_upload": env("THROTTLE_AVATAR_UPLOAD", default="10/hour"),
     },
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
 }
@@ -276,7 +300,7 @@ SPECTACULAR_SETTINGS = {
         "`X-Request-ID`. Object-level access failures return 404 to avoid revealing "
         "the existence of clinical records."
     ),
-    "VERSION": "1.0.0",
+    "VERSION": "1.2.0",
     "OAS_VERSION": "3.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
@@ -287,6 +311,20 @@ SPECTACULAR_SETTINGS = {
         {"name": "legal", "description": "Current legal documents."},
         {"name": "consents", "description": "Consent history and acceptance."},
         {"name": "public", "description": "Anonymous public content and forms."},
+        {"name": "assessments", "description": "Programs, questionnaires and patient assessments."},
+        {"name": "labs", "description": "Lab recommendations, uploads and downloads."},
+        {"name": "evaluations", "description": "Evaluation status, fee, payment and prescription."},
+        {"name": "patients", "description": "Profile, preferences, addresses and overview."},
+        {"name": "consultations", "description": "Physicians, availability, booking and video."},
+        {"name": "treatments", "description": "Treatments, prescriptions and renewals."},
+        {"name": "orders", "description": "Packages, checkout and orders."},
+        {"name": "subscriptions", "description": "Recurring deliveries."},
+        {"name": "payments", "description": "Payment status and saved cards."},
+        {"name": "webhooks", "description": "Signed provider callbacks."},
+        {"name": "messages", "description": "Patient and care-team messaging."},
+        {"name": "notifications", "description": "In-app notifications."},
+        {"name": "physicians", "description": "Physician onboarding, profile and availability."},
+        {"name": "clinical", "description": "Clinician review queue, patients and consultations."},
         {"name": "health", "description": "Liveness and readiness probes."},
     ],
     "SECURITY": [{"bearerAuth": []}],
@@ -311,6 +349,7 @@ SPECTACULAR_SETTINGS = {
             ("TERMS_OF_SERVICE", "Terms of Service"),
             ("PRIVACY_POLICY", "Privacy Policy"),
             ("HEALTH_DATA_PROCESSING", "Health data processing"),
+            ("CLINICIAN_AGREEMENT", "Clinician agreement"),
         ],
         "ComplaintDocumentTypeEnum": [
             ("DNI", "DNI"),
@@ -318,6 +357,106 @@ SPECTACULAR_SETTINGS = {
             ("PASSPORT", "Passport"),
             ("RUC", "RUC"),
         ],
+        "ComplaintStatusEnum": "apps.support.models.ComplaintBookEntry.Status",
+        "ContactMessageStatusEnum": "apps.support.models.ContactMessage.Status",
+        "AssessmentStatusEnum": [
+            ("DRAFT", "Draft"),
+            ("SUBMITTED", "Submitted"),
+            ("CANCELLED", "Cancelled"),
+        ],
+        "EvaluationStatusEnum": [
+            ("SCREENED_OUT", "Screened out"),
+            ("AWAITING_PAYMENT", "Awaiting payment"),
+            ("SUBMITTED", "Submitted"),
+            ("IN_REVIEW", "In review"),
+            ("PENDING_LABS", "Pending labs"),
+            ("APPROVED", "Approved"),
+            ("NOT_SUITABLE", "Not suitable"),
+            ("CANCELLED", "Cancelled"),
+        ],
+        "ScreeningResultEnum": [
+            ("ELIGIBLE", "Eligible"),
+            ("NEEDS_REVIEW", "Needs review"),
+            ("NOT_ELIGIBLE", "Not eligible"),
+        ],
+        "SexEnum": [("MALE", "Male"), ("FEMALE", "Female"), ("OTHER", "Other")],
+        "WeightUnitEnum": [("KG", "Kilograms"), ("LB", "Pounds")],
+        "HeightUnitEnum": [("CM", "Centimetres"), ("IN", "Inches")],
+        "BmiCategoryEnum": [
+            ("UNDERWEIGHT", "Underweight"),
+            ("HEALTHY", "Healthy"),
+            ("OVERWEIGHT", "Overweight"),
+            ("OBESE", "Obese"),
+        ],
+        "StepTypeEnum": [("MEASUREMENTS", "Measurements"), ("QUESTIONS", "Questions")],
+        "QuestionTypeEnum": [
+            ("SINGLE_CHOICE", "Single choice"),
+            ("MULTI_CHOICE", "Multiple choice"),
+            ("YES_NO", "Yes / no"),
+            ("TEXT", "Text"),
+        ],
+        "LabUploadStatusEnum": [
+            ("PENDING_UPLOAD", "Pending upload"),
+            ("SCANNING", "Scanning"),
+            ("CLEAN", "Clean"),
+            ("REJECTED", "Rejected"),
+        ],
+        "LabRejectionReasonEnum": [
+            ("VIRUS_DETECTED", "Virus detected"),
+            ("INVALID_FILE_TYPE", "Invalid file type"),
+            ("FILE_TOO_LARGE", "File too large"),
+            ("UPLOAD_MISSING", "Upload missing"),
+            ("UNREADABLE", "Unreadable"),
+        ],
+        "LabsStatusEnum": [
+            ("NOT_STARTED", "Not started"),
+            ("DEFERRED", "Deferred"),
+            ("SUBMITTED", "Submitted"),
+        ],
+        "FeeStatusEnum": [
+            ("NOT_REQUIRED", "Not required"),
+            ("WAIVED", "Waived"),
+            ("PENDING", "Pending"),
+            ("PAID", "Paid"),
+            ("REFUNDED", "Refunded"),
+        ],
+        "PaymentStatusEnum": "apps.assessments.enums.PaymentStatus",
+        "PaymentPurposeEnum": "apps.assessments.enums.PaymentPurpose",
+        "ConsultationStatusEnum": "apps.consultations.models.ConsultationStatus",
+        "CareRoleEnum": "apps.consultations.models.CareRole",
+        "TreatmentStatusEnum": "apps.treatments.models.TreatmentStatus",
+        "DoseFrequencyEnum": "apps.treatments.models.DoseFrequency",
+        "TimeOfDayEnum": "apps.treatments.models.TimeOfDay",
+        "AdministrationRouteEnum": "apps.treatments.models.AdministrationRoute",
+        "OrderStatusEnum": "apps.orders.models.OrderStatus",
+        "SubscriptionStatusEnum": "apps.orders.models.SubscriptionStatus",
+        "BillingTypeEnum": "apps.orders.models.BillingType",
+        "BillingDocumentTypeEnum": "apps.orders.models.BillingDocumentType",
+        "MessageSenderRoleEnum": "apps.messaging.models.MessageSenderRole",
+        "NotificationTypeEnum": "apps.notifications.models.NotificationType",
+        "AvailabilityKindEnum": "apps.consultations.models.AvailabilityKind",
+        "TimeBlockKindEnum": "apps.consultations.models.TimeBlockKind",
+        "NoteKindEnum": "apps.clinical.models.NoteKind",
+        "PhysicianVerificationStatusEnum": "apps.consultations.models.PhysicianVerificationStatus",
+        "InvitationStatusEnum": "apps.clinical.models.InvitationStatus",
+        "RenewalRequestStatusEnum": "apps.treatments.models.RenewalRequestStatus",
+        "RejectionReasonCodeEnum": "apps.assessments.enums.RejectionReasonCode",
+        "ReviewGroupEnum": "apps.assessments.enums.ReviewGroup",
+        "ChecklistStateEnum": [
+            ("DONE", "Done"),
+            ("ACTIVE", "Active"),
+            ("PENDING", "Pending"),
+            ("BLOCKED", "Blocked"),
+        ],
+        "JourneyStepEnum": [
+            ("FIRST_ASSESSMENT", "First assessment"),
+            ("SECOND_ASSESSMENT", "Second assessment"),
+            ("ELIGIBILITY_REVIEW", "Eligibility and review"),
+            ("PRESCRIPTION", "Prescription"),
+            ("ORDER", "Order"),
+        ],
+        "YesNoEnum": [("YES", "Yes"), ("NO", "No")],
+        "PaymentMethodEnum": [("CULQI", "Culqi")],
     },
     "SWAGGER_UI_SETTINGS": {
         "persistAuthorization": True,
@@ -413,6 +552,7 @@ CONSENT_VERSIONS = {
     "TERMS_OF_SERVICE": env("CONSENT_TERMS_VERSION", default="2026-11-01"),
     "PRIVACY_POLICY": env("CONSENT_PRIVACY_VERSION", default="2026-11-01"),
     "HEALTH_DATA_PROCESSING": env("CONSENT_HEALTH_DATA_VERSION", default="2026-11-01"),
+    "CLINICIAN_AGREEMENT": env("CONSENT_CLINICIAN_AGREEMENT_VERSION", default="2026-11-01"),
 }
 
 COMPLAINT_RESPONSE_SLA_HOURS = env.int("COMPLAINT_RESPONSE_SLA_HOURS", default=24)
@@ -466,10 +606,63 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 
-# Upload limits; the concrete 10 MB allow-list is enforced in Phase 2.
+# Upload limits; the concrete 10 MB allow-list is enforced by the lab flow.
 FILE_UPLOAD_MAX_MEMORY_SIZE = env.int("FILE_UPLOAD_MAX_MEMORY_SIZE", default=10 * 1024 * 1024)
 DATA_UPLOAD_MAX_MEMORY_SIZE = env.int("DATA_UPLOAD_MAX_MEMORY_SIZE", default=11 * 1024 * 1024)
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
+LAB_UPLOAD_MAX_BYTES = env.int("LAB_UPLOAD_MAX_BYTES", default=10 * 1024 * 1024)
+LAB_UPLOAD_URL_TTL_SECONDS = env.int("LAB_UPLOAD_URL_TTL_SECONDS", default=15 * 60)
+LAB_DOWNLOAD_URL_TTL_SECONDS = env.int("LAB_DOWNLOAD_URL_TTL_SECONDS", default=5 * 60)
+
+# Integration ports. Production must replace these with real adapters before
+# enabling payments or lab uploads.
+PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="apps.assessments.payments.FakePaymentProvider")
+
+# ---------------------------------------------------------------------------
+# Part 3: patient portal ([OPEN] values are configuration, not constants)
+# ---------------------------------------------------------------------------
+PORTAL_DEFAULT_TIMEZONE = env("PORTAL_DEFAULT_TIMEZONE", default="America/Lima")
+ADDRESS_MAX_PER_PATIENT = env.int("ADDRESS_MAX_PER_PATIENT", default=10)
+CONSULTATION_MIN_BOOKING_LEAD_HOURS = env.int("CONSULTATION_MIN_BOOKING_LEAD_HOURS", default=12)
+CONSULTATION_RESCHEDULE_MIN_HOURS = env.int("CONSULTATION_RESCHEDULE_MIN_HOURS", default=24)
+CONSULTATION_CANCEL_MIN_HOURS = env.int("CONSULTATION_CANCEL_MIN_HOURS", default=2)
+CONSULTATION_JOIN_EARLY_MINUTES = env.int("CONSULTATION_JOIN_EARLY_MINUTES", default=10)
+CONSULTATION_JOIN_GRACE_MINUTES = env.int("CONSULTATION_JOIN_GRACE_MINUTES", default=15)
+CONSULTATION_REQUEST_EXPIRY_HOURS = env.int("CONSULTATION_REQUEST_EXPIRY_HOURS", default=2)
+CONSULTATION_REMINDER_HOURS = env.list("CONSULTATION_REMINDER_HOURS", cast=int, default=[24, 1])
+VIDEO_PROVIDER = env("VIDEO_PROVIDER", default="apps.consultations.video.FakeVideoProvider")
+VIDEO_RECORDING_ENABLED = env.bool("VIDEO_RECORDING_ENABLED", default=False)
+DAILY_API_KEY = env("DAILY_API_KEY", default="")
+DAILY_DOMAIN = env("DAILY_DOMAIN", default="adelgaceya.daily.co")
+DAILY_WEBHOOK_SECRET = env("DAILY_WEBHOOK_SECRET", default="")
+CULQI_WEBHOOK_SECRET = env("CULQI_WEBHOOK_SECRET", default="")
+WEBHOOK_MAX_BODY_BYTES = env.int("WEBHOOK_MAX_BODY_BYTES", default=256 * 1024)
+ORDER_NUMBER_PREFIX = env("ORDER_NUMBER_PREFIX", default="ADL-ORD-")
+ORDER_SHIPPING_FEE = env("ORDER_SHIPPING_FEE", default="0.00")
+ORDER_TAX_RATE = env("ORDER_TAX_RATE", default="0")
+ORDER_DELIVERY_DAYS_MIN = env.int("ORDER_DELIVERY_DAYS_MIN", default=2)
+ORDER_DELIVERY_DAYS_MAX = env.int("ORDER_DELIVERY_DAYS_MAX", default=5)
+SUBSCRIPTION_RETRY_DAYS = env.list("SUBSCRIPTION_RETRY_DAYS", cast=int, default=[1, 3, 7])
+SUBSCRIPTION_PAUSE_MAX_DAYS = env.int("SUBSCRIPTION_PAUSE_MAX_DAYS", default=90)
+PRESCRIPTION_DOWNLOAD_TTL_SECONDS = env.int("PRESCRIPTION_DOWNLOAD_TTL_SECONDS", default=5 * 60)
+
+# ---------------------------------------------------------------------------
+# Part 4: clinician side ([OPEN] values are configuration)
+# ---------------------------------------------------------------------------
+MFA_REQUIRED_ROLES = env.list("MFA_REQUIRED_ROLES", default=["PHYSICIAN", "STAFF", "ADMIN"])
+MFA_ISSUER = env("MFA_ISSUER", default="Adelgaceya")
+MFA_TOKEN_TTL_SECONDS = env.int("MFA_TOKEN_TTL_SECONDS", default=300)
+MFA_MAX_ATTEMPTS = env.int("MFA_MAX_ATTEMPTS", default=5)
+PHYSICIAN_INVITATION_TTL_DAYS = env.int("PHYSICIAN_INVITATION_TTL_DAYS", default=7)
+AVATAR_MAX_BYTES = env.int("AVATAR_MAX_BYTES", default=5 * 1024 * 1024)
+AVATAR_MAX_PIXELS = env.int("AVATAR_MAX_PIXELS", default=4000)
+AVATAR_URL_TTL_SECONDS = env.int("AVATAR_URL_TTL_SECONDS", default=60 * 60)
+EVALUATION_CLAIM_TIMEOUT_HOURS = env.int("EVALUATION_CLAIM_TIMEOUT_HOURS", default=4)
+NEWLY_APPROVED_DAYS = env.int("NEWLY_APPROVED_DAYS", default=14)
+PHYSICIAN_RESCHEDULE_MIN_HOURS = env.int("PHYSICIAN_RESCHEDULE_MIN_HOURS", default=1)
+PRESCRIPTION_MAX_START_DAYS = env.int("PRESCRIPTION_MAX_START_DAYS", default=30)
+PRESCRIPTION_MAX_VALIDITY_MONTHS = env.int("PRESCRIPTION_MAX_VALIDITY_MONTHS", default=12)
+LAB_SCANNER = env("LAB_SCANNER", default="apps.assessments.scanning.NoopLabScanner")
 
 # ---------------------------------------------------------------------------
 # Async and observability
@@ -486,7 +679,20 @@ CELERY_TASK_SOFT_TIME_LIMIT = 240
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_BROKER_CONNECTION_TIMEOUT = env.int("CELERY_BROKER_CONNECTION_TIMEOUT", default=5)
 CELERY_TIMEZONE = "America/Lima"
-CELERY_BEAT_SCHEDULE: dict[str, dict[str, object]] = {}
+CELERY_BEAT_SCHEDULE: dict[str, dict[str, object]] = {
+    "consultations-housekeeping": {
+        "task": "apps.consultations.tasks.run_consultation_jobs",
+        "schedule": 300.0,
+    },
+    "clinical-housekeeping": {
+        "task": "apps.clinical.tasks.run_clinical_jobs",
+        "schedule": 900.0,
+    },
+    "subscriptions-renewals": {
+        "task": "apps.orders.tasks.run_subscription_jobs",
+        "schedule": 900.0,
+    },
+}
 
 SENTRY_DSN = env("SENTRY_DSN", default="")
 SENTRY_ENVIRONMENT = env("SENTRY_ENVIRONMENT", default=ENVIRONMENT)

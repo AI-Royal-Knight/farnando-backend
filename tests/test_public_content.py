@@ -16,11 +16,11 @@ pytestmark = pytest.mark.django_db
 
 def test_site_settings_are_database_backed(client: Client) -> None:
     settings = SiteSettings.load()
-    settings.contact_email = "hola@adelgaceya.pe"
+    settings.contact_email = "contact@adelgaceya.pe"
     settings.save()
     response = client.get("/api/v1/public/site-settings/")
     assert response.status_code == 200
-    assert response.json()["contact_email"] == "hola@adelgaceya.pe"
+    assert response.json()["contact_email"] == "contact@adelgaceya.pe"
     assert "public" in response["Cache-Control"]
 
 

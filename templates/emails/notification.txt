@@ -1,0 +1,9 @@
+Hola {{ full_name }},
+
+{{ title }}
+
+{{ body }}
+
+{{ app_url }}
+
+Adelgaceya

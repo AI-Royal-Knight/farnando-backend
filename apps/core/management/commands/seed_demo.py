@@ -1,7 +1,9 @@
 """Idempotent demo data for every role and (eventually) every screen.
 
-Phase 1 creates the four identities and their consent records. Later phases
-extend this command with assessments, labs, evaluations, orders and messages.
+Creates one identity per role (plus a nurse, who is a STAFF user with a NURSE
+clinician profile), their consents, public content and the Part 3 care-team
+data: clinician profiles, weekly availability, the patient's assigned nurse and
+a deliverable address. Treatments and orders need a physician decision (Part 4).
 """
 
 from __future__ import annotations
@@ -34,6 +36,13 @@ DEMO_USERS = [
     {
         "email": "staff@adelgaceya.pe",
         "full_name": "Sofía Soporte",
+        "role": Role.STAFF,
+        "is_staff": True,
+        "is_superuser": False,
+    },
+    {
+        "email": "sarah.nurse@adelgaceya.pe",
+        "full_name": "Sarah Torres",
         "role": Role.STAFF,
         "is_staff": True,
         "is_superuser": False,
@@ -81,6 +90,8 @@ class Command(BaseCommand):
             user.set_password(password)
             user.save()
             for document_type in ConsentRecord.DocumentType.values:
+                if document_type == "CLINICIAN_AGREEMENT" and spec["role"] != Role.PHYSICIAN:
+                    continue
                 document = LegalDocument.objects.filter(
                     document_type=document_type, is_current=True
                 ).first()
@@ -94,10 +105,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"ready: {user.email} ({user.role})"))
 
         site = SiteSettings.load()
-        site.contact_email = "hola@adelgaceya.pe"
-        site.contact_phone = "+51 999 999 999"
-        site.address = "Lima, Perú"
-        site.legal_entity_name = "Adelgaceya S.A.C."
+        # Contract Part 1 v1.2 demo values. Replace with real data before launch;
+        # the API always reads these from the database, never from code.
+        site.contact_email = "contact@adelgaceya.pe"
+        site.contact_phone = "+51 1 555 0100"
+        site.address = "Av. Larco 1234, Miraflores, Lima 15074, Perú"
+        site.legal_entity_name = "Adelgaceya"
         site.social_links = [
             {"platform": "INSTAGRAM", "url": "https://instagram.com/adelgaceya"},
             {"platform": "FACEBOOK", "url": "https://facebook.com/adelgaceya"},
@@ -154,8 +167,84 @@ class Command(BaseCommand):
                 },
             )
 
+        self._seed_care_team()
+
         self.stdout.write(
             self.style.WARNING(
                 "Demo password is well-known. Never run seed_demo against production."
             )
         )
+
+    def _seed_care_team(self) -> None:
+        from datetime import time
+
+        from apps.clinical.models import Specialty
+        from apps.consultations.models import AvailabilityRule, CareRole, ClinicianProfile
+        from apps.patients.models import Address, Ubigeo
+        from apps.patients.services import create_address, get_or_create_profile
+
+        physician = User.objects.get(email="marcus.vance@adelgaceya.pe")
+        nurse = User.objects.get(email="sarah.nurse@adelgaceya.pe")
+        patient = User.objects.get(email="paciente@adelgaceya.pe")
+        ClinicianProfile.objects.update_or_create(
+            user=physician,
+            defaults={
+                "care_role": CareRole.PHYSICIAN,
+                "display_name": "Dr. Marcus Vance, MD",
+                "headline": "Board-Certified Endocrinology & Metabolic Care",
+                "specialty": "Endocrinology",
+                "specialty_ref": Specialty.objects.filter(name="Endocrinology").first(),
+                "license_number": "12345",
+                "specialty_registration_number": "RNE6789",
+                "license_label": "CMP 12345",
+                "verification_status": "VERIFIED",
+                "phone": "+51987650000",
+                "languages": ["es", "en"],
+                "accepts_new_consultations": True,
+                "timezone": "America/Lima",
+            },
+        )
+        ClinicianProfile.objects.update_or_create(
+            user=nurse,
+            defaults={
+                "care_role": CareRole.NURSE,
+                "display_name": "Nurse Sarah",
+                "headline": "Patient care coordinator",
+                "accepts_new_consultations": False,
+            },
+        )
+        # Monday-Friday 09:00-18:00 Lima time with a recurring BLOCKED lunch break.
+        for weekday in range(1, 6):
+            AvailabilityRule.objects.get_or_create(
+                physician=physician,
+                weekday=weekday,
+                kind="AVAILABLE",
+                start_time=time(9),
+                end_time=time(18),
+            )
+            AvailabilityRule.objects.get_or_create(
+                physician=physician,
+                weekday=weekday,
+                kind="BLOCKED",
+                start_time=time(13),
+                end_time=time(14),
+                defaults={"label": "Lunch break"},
+            )
+        profile = get_or_create_profile(patient)
+        profile.assigned_nurse = nurse
+        profile.phone = "+51987654321"
+        profile.save(update_fields=["assigned_nurse", "phone", "updated_at"])
+        miraflores = Ubigeo.objects.filter(code="150122").first()
+        if miraflores is not None and not Address.objects.filter(user=patient).exists():
+            create_address(
+                patient,
+                {
+                    "label": "Home",
+                    "recipient_name": "Ana Quispe",
+                    "phone": "+51987654321",
+                    "line1": "Av. Larco 1234",
+                    "line2": "Dpto. 502",
+                    "reference": "Frente al parque Kennedy",
+                    "ubigeo": miraflores,
+                },
+            )

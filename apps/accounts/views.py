@@ -23,12 +23,18 @@ from apps.accounts.serializers import (
     ChangePasswordSerializer,
     ConsentBatchSerializer,
     ConsentStatusSerializer,
+    EmptyBodySerializer,
     GoogleAuthResponseSerializer,
     GoogleLoginSerializer,
     LegalDocumentDetailSerializer,
     LegalDocumentSummarySerializer,
     LoginSerializer,
     LogoutSerializer,
+    MfaBackupCodesSerializer,
+    MfaCodeSerializer,
+    MfaDisableSerializer,
+    MfaSetupSerializer,
+    MfaVerifySerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     RefreshRequestSerializer,
@@ -143,6 +149,11 @@ class LoginView(APIView):
     @extend_schema(
         tags=["auth"],
         summary="Log in with email and password",
+        description=(
+            "When the account has MFA enabled the response is "
+            '`{mfa_required: true, mfa_token, methods: ["TOTP"]}` instead of tokens; '
+            "finish with `POST /auth/mfa/verify/`."
+        ),
         auth=[],
         request=LoginSerializer,
         responses={200: AuthResponseSerializer, **COMMON_ERRORS},
@@ -225,6 +236,8 @@ class ResendVerificationView(APIView):
         responses={204: None, **COMMON_ERRORS},
     )
     def post(self, request: Request) -> Response:
+        serializer = EmptyBodySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         EmailVerificationService.resend(user=cast(User, request.user))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -437,3 +450,84 @@ __all__ = [
     "ResendVerificationView",
     "VerifyEmailView",
 ]
+
+
+class MfaVerifyView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = "auth"
+
+    @extend_schema(
+        tags=["auth"],
+        summary="Finish an MFA login with a TOTP or backup code",
+        auth=[],
+        request=MfaVerifySerializer,
+        responses={200: AuthResponseSerializer, **COMMON_ERRORS},
+    )
+    def post(self, request: Request) -> Response:
+        from apps.accounts.mfa import verify_challenge
+        from apps.accounts.serializers import token_payload
+
+        serializer = MfaVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = verify_challenge(
+            serializer.validated_data["mfa_token"], serializer.validated_data["code"]
+        )
+        return Response(token_payload(user))
+
+
+class MfaSetupView(APIView):
+    permission_classes = [IsAuthenticatedAndActive]
+    throttle_scope = "auth"
+
+    @extend_schema(
+        tags=["auth"],
+        summary="Start TOTP enrollment",
+        request=None,
+        responses={200: MfaSetupSerializer, **COMMON_ERRORS},
+    )
+    def post(self, request: Request) -> Response:
+        from apps.accounts.mfa import start_setup
+
+        return Response(start_setup(cast(User, request.user)))
+
+
+class MfaConfirmView(APIView):
+    permission_classes = [IsAuthenticatedAndActive]
+    throttle_scope = "auth"
+
+    @extend_schema(
+        tags=["auth"],
+        summary="Confirm TOTP enrollment; returns backup codes once",
+        request=MfaCodeSerializer,
+        responses={200: MfaBackupCodesSerializer, **COMMON_ERRORS},
+    )
+    def post(self, request: Request) -> Response:
+        from apps.accounts.mfa import confirm_setup
+
+        serializer = MfaCodeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        codes = confirm_setup(cast(User, request.user), serializer.validated_data["code"])
+        return Response({"backup_codes": codes})
+
+
+class MfaDisableView(APIView):
+    permission_classes = [IsAuthenticatedAndActive]
+    throttle_scope = "auth"
+
+    @extend_schema(
+        tags=["auth"],
+        summary="Disable TOTP (not allowed for clinical roles)",
+        request=MfaDisableSerializer,
+        responses={204: None, **COMMON_ERRORS},
+    )
+    def post(self, request: Request) -> Response:
+        from apps.accounts.mfa import disable
+
+        serializer = MfaDisableSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        disable(
+            cast(User, request.user),
+            password=serializer.validated_data["password"],
+            code=serializer.validated_data["code"],
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -27,6 +27,10 @@ urlpatterns = [
         name="password-reset-confirm",
     ),
     path("auth/me/", views.MeView.as_view(), name="me"),
+    path("auth/mfa/verify/", views.MfaVerifyView.as_view(), name="mfa-verify"),
+    path("auth/mfa/totp/setup/", views.MfaSetupView.as_view(), name="mfa-setup"),
+    path("auth/mfa/totp/confirm/", views.MfaConfirmView.as_view(), name="mfa-confirm"),
+    path("auth/mfa/totp/disable/", views.MfaDisableView.as_view(), name="mfa-disable"),
     path("auth/change-password/", views.ChangePasswordView.as_view(), name="change-password"),
     path("legal-documents/", views.LegalDocumentListView.as_view(), name="legal-documents"),
     path(

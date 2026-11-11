@@ -38,24 +38,25 @@ retention obligations.
 
 | App | Responsibility | Phase |
 | --- | --- | --- |
-| `core` | Base model, request IDs, error envelope, pagination, permissions, encryption field, email port, health, logging, schema helpers | 1 |
-| `accounts` | Custom user, roles, legal documents, consents, registration, JWT, Google, verification, password reset | 1 |
-| `patients` | Patient profile, units, demographics | 2 |
-| `physicians` | Physician profile, licence, specialties, availability | 2–3 |
-| `staff` | Staff profile and operational permissions | 2 |
-| `assessments` | Resumable assessment, typed steps, BMI, eligibility rules | 2 |
-| `labs` | Lab uploads, scanning, review status, pre-signed URLs | 2 |
-| `evaluations` | Physician queue, state machine, status history | 3 |
-| `consultations` | Scheduling, video rooms/tokens, consultation notes | 3 |
-| `treatments` | Programs, protocols, prescribed treatments, refills, dose reminders | 3–4 |
-| `catalog` | Public content (site settings, FAQs, testimonials, stats, complaint categories) now; programs/packages/content in Part 4 | 1, 4 |
-| `orders` | Orders, items, subscriptions, shipments, tracking | 4 |
-| `payments` | Payment intents, webhooks, refunds, dunning | 4 |
-| `messaging` | Threads, messages, attachments, read receipts | 5 |
-| `support` | Contact messages and complaints book now; support tickets in Part 5 | 1, 5 |
-| `notifications` | Email/SMS/in-app notifications and templates | 1, 5 |
-| `reports` | Aggregate, cached analytics | 6 |
-| `audit` | Append-only audit log and clinical-access mixin | 2 |
+| `core` | Base model, request IDs, error envelope, pagination, permissions, encryption field, private storage, audit log, email port, health, logging, schema helpers | 1–2 |
+| `accounts` | Custom user, roles, legal documents, consents, registration, JWT, Google, verification, password reset, lockout envelope | 1 |
+| `assessments` | Programs and questionnaire versions/steps/questions, resumable assessments, measurements/BMI, answers, screening, evaluation state and history, fee/payment records, lab uploads, prescriptions | 2 |
+| `catalog` | Public site settings, FAQs, testimonials, stats, complaint categories | 1 |
+| `support` | Contact messages and complaints book | 1 |
+| `patients` | Patient profile and preferences, addresses, ubigeo, care team, dashboard overview | 3 |
+| `consultations` | Clinician profiles (physician/nurse), availability, consultation types, booking state machine, video port, reminders | 3 |
+| `treatments` | Products, treatments, schedule-derived next dose, prescription download, renewal requests | 3 |
+| `orders` | Packages, quote/checkout, order state machine, refunds, subscriptions and renewals | 3 |
+| `payments` | Saved cards, charges/refunds through the provider port, signed Culqi and Daily webhooks (the `Payment` table stays in `assessments`) | 3 |
+| `messaging` | Patient/care-team threads, encrypted messages, read receipts, ETag polling | 3 |
+| `notifications` | In-app notifications and preference-aware generic emails | 3 |
+| `reports` | Aggregate, cached analytics | 6 (planned) |
+
+Part 2 deliberately keeps programs, assessments, evaluations, fees/payments,
+labs and prescriptions in one `assessments` app. They share one aggregate
+(assessment → evaluation) and one transaction boundary; splitting them now
+would add cross-app transactions without an operational benefit. Profiles and
+the physician workflow remain separate phases.
 
 Each app has `models.py`, `serializers.py`, `views.py`, `urls.py`, `services.py`,
 `selectors.py`, `permissions.py`, `filters.py`, `tasks.py`, `admin.py`, and
@@ -115,6 +116,83 @@ Failures return the envelope
 `{"code", "message", "details", "request_id"}`. Unknown `/api/` paths and 500s
 also use it. No exception message or traceback is returned to clients.
 
+## 5.1 Assessment and evaluation domain (Part 2)
+
+- A `Program` owns admin-editable rules (target lower, `min_bmi`, age range,
+  cooldown), fee configuration, projection copy and lab panels. A program is
+  startable only when it has a published `QuestionnaireVersion`.
+- An `Assessment` pins the published questionnaire at creation and stores
+  canonical measurements plus the display units. Drafts are one per
+  patient/program (partial unique constraint) and are resumable.
+- Questionnaire steps are typed (`MEASUREMENTS`, `QUESTIONS`). Questions are
+  single/multi choice, yes/no or text; conditional visibility uses
+  `show_if`/`show_if_equals`. Screening effects live on questions/options and
+  are admin-only.
+- Submit computes screening, locks the assessment and creates one `Evaluation`
+  plus a fee snapshot and the first `EvaluationStatusHistory` row. The fee is
+  configuration, not a hardcoded price.
+- Evaluation transitions are centralised in `EvaluationService`:
+
+  ```text
+  SCREENED_OUT  -> AWAITING_PAYMENT | SUBMITTED
+  AWAITING_PAYMENT -> SUBMITTED | CANCELLED
+  SUBMITTED -> IN_REVIEW | CANCELLED
+  IN_REVIEW -> APPROVED | NOT_SUITABLE | PENDING_LABS | SUBMITTED
+  PENDING_LABS -> SUBMITTED | CANCELLED
+  APPROVED | NOT_SUITABLE | CANCELLED -> terminal
+  ```
+
+  Part 2 exposes only the patient transitions (payment success through the
+  Part 3 webhook, review request, cancel, lab submit/skip). Physician decisions
+  belong to Part 3.
+- Payments go through a `PaymentProvider` port. A synchronous success is stored
+  as `PENDING`; the verified webhook is the only path that finalises the fee.
+- Lab files are private. The client asks for a pre-signed `PUT`, uploads
+  directly, then confirms. Confirm verifies existence/size/magic bytes and
+  queues a scan; only `CLEAN` files can be downloaded. Downloads and
+  non-owner clinical reads write an `AuditLog` row.
+
+## 5.2 Patient portal domain (Part 3)
+
+- **One call per dashboard.** `GET /patients/me/overview/` computes sidebar
+  visibility, the primary action (first-match rules), next consultation, next
+  dose and counters on the server.
+- **Slots are computed live** from weekly rules minus blocks, open
+  consultations and the lead time. Booking locks the physician's profile row,
+  recomputes, and relies on a partial unique constraint as the backstop.
+- **Payments are webhook-final.** Checkout creates `Order(PENDING_PAYMENT)` and
+  a `Payment(PENDING)`. Only the signed webhook moves money state; it is stored
+  in `WebhookEvent` first, deduplicated by provider event id, applied in one
+  transaction, and never moves a successful payment backwards. Provider payload
+  parsing lives only in `apps/payments/culqi.py` and `apps/payments/daily.py`.
+- **Refills are consumed** when the order reaches `PRESCRIPTION_VERIFIED` and
+  restored on cancellation, under a row lock on the treatment.
+- **Scheduled jobs** (Celery beat): `run_consultation_jobs` every 5 minutes
+  (expiry, no-show, reminders) and `run_subscription_jobs` every 15 minutes
+  (renewals, retries, period-end cancellation, auto-resume).
+- **Notifications** are generic by construction (fixed bilingual copy per
+  type); the in-app row is always written and the email follows preferences.
+- **Datetimes**: DRF renders and parses in UTC (`apps.core.apps`); business
+  dates (age, delivery estimates) use `America/Lima`.
+
+## 5.3 Clinician domain (Part 4)
+
+- **`apps.clinical`** holds onboarding, the review queue and decisions, My
+  Patients, notes, clinician consultations, availability editing, the calendar
+  and the dashboard. It reuses Part 2/3 models and state machines rather than
+  duplicating them.
+- **Gates:** `IsVerifiedPhysician` raises `credentials_not_verified`; MFA
+  enrolment is enforced in `ContractJWTAuthentication`.
+- **Decisions** are serialised per evaluation with a row lock, guarded by
+  `If-Match` on `Evaluation.version` (bumped on every transition) and stored
+  under `Idempotency-Key`. Approval writes the prescription, treatments and
+  version 1 in one transaction, then queues the unsigned PDF.
+- **Availability** is computed from AVAILABLE rules (per type), EXTRA blocks,
+  BLOCKED rules/blocks and open consultations. Edits run inside a savepoint
+  and roll back if a booked visit would lose coverage.
+- **Beat job** `run_clinical_jobs` (15 min): release idle claims and apply due
+  treatment versions.
+
 ## 6. Identity and authentication
 
 - Custom `accounts.User` with UUID PK, lowercase-unique email, `role`
@@ -122,8 +200,9 @@ also use it. No exception message or traceback is returned to clients.
   `email_verified_at`. It is created in the first migration; `AUTH_USER_MODEL`
   points at it before anything else.
 - Access JWT: 15 minutes. Refresh JWT: 7 days, rotating, blacklisted after
-  rotation. Logout and password reset blacklist outstanding refresh tokens.
-  Access tokens cannot be revoked before expiry; see ADR-0002 for the trade-off.
+  rotation. Logout blacklists the presented refresh token; password reset
+  blacklists all outstanding refresh tokens. Access tokens cannot be revoked
+  before expiry; see ADR-0002 for the trade-off.
 - Registration follows the owner-approved Part 1 contract: `201` on success,
   a generic `400 validation_error` for an existing address, and an
   account-exists email with a reset link. Terms and privacy consent are stored
@@ -131,7 +210,7 @@ also use it. No exception message or traceback is returned to clients.
   recorded in `docs/contract-deviations.md`.
 - Email verification uses a stateless signed token bound to the user's email,
   password and verification state; the link expires after
-  `EMAIL_VERIFICATION_TIMEOUT` (3 days by default).
+  `EMAIL_VERIFICATION_TIMEOUT` (24 hours by default) and is single-use.
 - Password reset always returns 204. Reset tokens are single-use by construction
   (the password hash participates in the token) and revoke outstanding refresh
   tokens.
@@ -190,17 +269,16 @@ The full target ERD is in [erd.md](erd.md) and will be completed as phases land.
 
 ## 8. API surface by screen
 
-| Screen | Phase 1 endpoints | Later endpoints |
+| Screen | Implemented endpoints | Later endpoints |
 | --- | --- | --- |
 | Auth | register, login, refresh, logout, verify email, resend, password reset, change password, Google, me | — |
-| Legal/consent | current legal documents, consent history/create | health-data consent enforcement at assessment submit |
+| Legal/consent | current legal documents, consent history/create | — |
 | Public | site settings, FAQs, testimonials, stats, complaint categories, contact, complaints book | — |
-| Profile | — | patient/physician/staff profiles |
-| Assessment | — | draft, steps, summary, submit, idempotency |
-| Labs | — | upload URL, confirm, list, pre-signed download |
-| Evaluation | — | physician queue, decide, request labs, history |
+| Assessment | programs, create/resume/list/detail, questionnaire, measurements, step upsert, summary, submit, request-review, cancel | patient profile and unit preferences (Part 3) |
+| Labs | lab recommendations, pre-signed upload create, list/detail/delete, confirm, pre-signed download, submit, skip | physician review of lab results (Part 3) |
+| Evaluation | patient evaluation status/checklist/journey, fee snapshot, pay attempt, prescription download | physician queue, decide, request labs, history (Part 3); verified payment webhook (Part 3) |
 | Portal | — | overview, consultations, treatment, orders, messages |
-| Admin | user/consent admin | patient/physician/staff CRUD, reports |
+| Admin | user/consent admin, program/questionnaire/screening/fee/lab configuration | patient/physician/staff CRUD, reports |
 | Reports | — | revenue, MRR, orders, users, evaluation outcomes, churn |
 
 All resource routes are plural nouns under `/api/v1/`. Non-CRUD actions use
@@ -218,6 +296,12 @@ useful.
 - Payment (`Culqi` default + Fake), video (`Daily.co` default + Fake), storage,
   email and antivirus are ports. Provider SDKs are imported only inside their
   adapter (ADR-0005/0006).
+- Part 2 lab confirmation enqueues `scan_lab_upload` with
+  `transaction.on_commit`; the default `NoopLabScanner` is local/test-only and
+  production must configure a ClamAV adapter. Scan retries are idempotent.
+- Part 2 payments are written synchronously through the provider port, but a
+  synchronous success stays `PENDING` until the Part 3 signature-verified
+  webhook calls `PaymentService.mark_succeeded`.
 - Outbox/event delivery for money-moving events is designed in Phase 4;
   raw webhook payloads are stored once, with a unique provider event id.
 

@@ -1,0 +1,3 @@
+{{ message }}
+
+Open the Adelgaceya admin to review it.

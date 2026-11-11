@@ -69,6 +69,7 @@ CONSENT_VERSIONS = {
     "TERMS_OF_SERVICE": "2026-11-01",
     "PRIVACY_POLICY": "2026-11-01",
     "HEALTH_DATA_PROCESSING": "2026-11-01",
+    "CLINICIAN_AGREEMENT": "2026-11-01",
 }
 
 FRONTEND_URL = "http://localhost:3000"
@@ -85,3 +86,9 @@ EMAIL_VERIFICATION_TIMEOUT = 86400
 
 LOGGING["root"]["level"] = "WARNING"
 LOGGING["loggers"]["django"]["level"] = "WARNING"
+
+CULQI_WEBHOOK_SECRET = "test-culqi-webhook-secret"
+DAILY_WEBHOOK_SECRET = "test-daily-webhook-secret"
+
+# MFA enforcement is exercised explicitly in tests/test_part4_auth.py.
+MFA_REQUIRED_ROLES: list[str] = []
