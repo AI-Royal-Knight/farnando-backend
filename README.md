@@ -30,7 +30,7 @@ Prerequisites: Docker Desktop/Engine with Compose v2.
 git clone <repository-url> adelgaceya
 cd adelgaceya
 cp .env.example .env          # optional; compose has safe local defaults
-docker compose up --build -d
+./scripts/compose-up.sh       # or: make up (picks free ports, see below)
 docker compose exec web python manage.py seed_demo
 ```
 
@@ -55,16 +55,13 @@ Demo accounts created by `seed_demo` (password `Adelgaceya2026!`):
 
 > The demo password is public. Never run `seed_demo` against production.
 
-**Port already in use?** If `docker compose up` fails with
-`failed to bind host port ... address already in use`, another process owns
-that host port. Either stop it (`sudo ss -ltnp 'sport = :8000'` shows which),
-or pick free ports in `.env` and run `docker compose up -d` again:
-
-```bash
-WEB_PORT=8010            # API on http://<host>:8010
-MINIO_PORT=9010          # also MINIO_CONSOLE_PORT, MAILPIT_SMTP_PORT,
-MAILPIT_UI_PORT=8026     # MAILPIT_UI_PORT, POSTGRES_PORT, REDIS_PORT
-```
+**Ports are picked automatically.** `./scripts/compose-up.sh` (or `make up`)
+tries each default port (API 8000, Postgres 5435, Redis 6381, MinIO
+9000/9001, Mailpit 1025/8025). If one is already in use, it takes the next
+free port, saves it to `.env` and prints the final URLs, for example
+`API: http://<host>:8001/api/v1/`. A running stack keeps its ports. To force a
+port, set it in `.env` (`WEB_PORT=8010`); it is used if free. Plain
+`docker compose up` also works and uses whatever is in `.env`.
 
 On a server reached by IP or domain, also set `DJANGO_ALLOWED_HOSTS` (and
 `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_URL`) in `.env`,

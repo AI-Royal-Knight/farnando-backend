@@ -30,9 +30,9 @@ x-app-environment: &app-environment
   WEB_CONCURRENCY: "2"
 
 x-app: &app
-  build:
-    context: .
+  # Built once by `web`; worker and beat reuse the same image.
   image: adelgaceya:local
+  pull_policy: never
   restart: unless-stopped
   env_file:
     - path: .env
@@ -47,6 +47,9 @@ x-app: &app
 services:
   web:
     <<: *app
+    build:
+      context: .
+    pull_policy: missing
     command: ["gunicorn", "config.wsgi:application", "--config", "config/gunicorn.py"]
     environment:
       <<: *app-environment

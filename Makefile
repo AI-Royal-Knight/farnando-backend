@@ -1,7 +1,7 @@
 .PHONY: up down logs test coverage lint format typecheck check migrate makemigrations seed schema postman shell docker-build docker-check
 
 up:
-	docker compose up --build -d
+	./scripts/compose-up.sh
 
 down:
 	docker compose down
