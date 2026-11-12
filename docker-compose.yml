@@ -73,12 +73,23 @@ services:
     environment:
       <<: *app-environment
       RUN_MIGRATIONS: "0"
+    healthcheck:
+      # The image's default check probes the web port; ping the worker instead.
+      test: ["CMD-SHELL", "celery -A config inspect ping -d celery@$$HOSTNAME --timeout 5"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
   beat:
     <<: *app
-    command: ["celery", "-A", "config", "beat", "-l", "info"]
+    # /app is read-only for the app user, so keep the schedule file in /tmp.
+    command:
+      ["celery", "-A", "config", "beat", "-l", "info", "-s", "/tmp/celerybeat-schedule"]
     environment:
       <<: *app-environment
       RUN_MIGRATIONS: "0"
+    healthcheck:
+      disable: true
 
   postgres:
     image: postgres:16-alpine
