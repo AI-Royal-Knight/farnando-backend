@@ -1,0 +1,3 @@
+A new support ticket was created: {{ reference }}.
+
+Open the Adelgaceya staff portal to review it.

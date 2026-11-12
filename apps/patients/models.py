@@ -60,6 +60,14 @@ class PatientProfile(BaseModel):
     email_reminders = models.BooleanField(default=True)
     email_marketing = models.BooleanField(default=False)
     marketing_opt_in_at = models.DateTimeField(null=True, blank=True)
+    assigned_physician = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_care_patients",
+        help_text="Care physician set by staff (Part 5, 4.3).",
+    )
     assigned_nurse = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

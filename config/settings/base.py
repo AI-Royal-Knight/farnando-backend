@@ -72,6 +72,8 @@ INSTALLED_APPS = [
     "apps.messaging.apps.MessagingConfig",
     "apps.notifications.apps.NotificationsConfig",
     "apps.clinical.apps.ClinicalConfig",
+    "apps.staff.apps.StaffConfig",
+    "apps.backoffice.apps.BackofficeConfig",
 ]
 
 MIDDLEWARE = [
@@ -280,6 +282,11 @@ REST_FRAMEWORK = {
         "invitation_lookup": env("THROTTLE_INVITATION_LOOKUP", default="20/hour"),
         "invitation_accept": env("THROTTLE_INVITATION_ACCEPT", default="5/hour"),
         "avatar_upload": env("THROTTLE_AVATAR_UPLOAD", default="10/hour"),
+        "staff_invitation_resend": env("THROTTLE_STAFF_INVITATION_RESEND", default="5/hour"),
+        "staff_invitation_lookup": env("THROTTLE_STAFF_INVITATION_LOOKUP", default="20/hour"),
+        "staff_invitation_accept": env("THROTTLE_STAFF_INVITATION_ACCEPT", default="5/hour"),
+        "ticket_create": env("THROTTLE_TICKET_CREATE", default="10/hour"),
+        "privacy_request": env("THROTTLE_PRIVACY_REQUEST", default="3/day"),
     },
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
 }
@@ -325,6 +332,10 @@ SPECTACULAR_SETTINGS = {
         {"name": "notifications", "description": "In-app notifications."},
         {"name": "physicians", "description": "Physician onboarding, profile and availability."},
         {"name": "clinical", "description": "Clinician review queue, patients and consultations."},
+        {"name": "staff", "description": "Staff portal: patients, evaluations, tickets, orders."},
+        {"name": "admin", "description": "Admin portal: accounts, catalog, content, reports."},
+        {"name": "support", "description": "Patient support tickets."},
+        {"name": "privacy", "description": "Patient privacy requests."},
         {"name": "health", "description": "Liveness and readiness probes."},
     ],
     "SECURITY": [{"bearerAuth": []}],
@@ -358,7 +369,26 @@ SPECTACULAR_SETTINGS = {
             ("RUC", "RUC"),
         ],
         "ComplaintStatusEnum": "apps.support.models.ComplaintBookEntry.Status",
-        "ContactMessageStatusEnum": "apps.support.models.ContactMessage.Status",
+        "TicketStatusEnum": "apps.support.models.TicketStatus",
+        "TicketPriorityEnum": "apps.support.models.TicketPriority",
+        "TicketSourceEnum": "apps.support.models.TicketSource",
+        "StaffTypeEnum": "apps.staff.models.StaffType",
+        "AccountStatusEnum": "apps.staff.models.AccountStatus",
+        "StaffPermissionEnum": "apps.staff.models.Permission",
+        "RefundReasonEnum": "apps.payments.models.RefundReason",
+        "BillingCadenceEnum": "apps.orders.models.BillingCadence",
+        "ContentCategoryEnum": "apps.catalog.models.ContentCategory",
+        "ContentStatusEnum": "apps.catalog.models.ContentStatus",
+        "QuestionnaireStatusEnum": "apps.assessments.models.QuestionnaireStatus",
+        "PrivacyRequestTypeEnum": "apps.backoffice.models.PrivacyRequestType",
+        "PrivacyRequestStatusEnum": "apps.backoffice.models.PrivacyRequestStatus",
+        "ReportKindEnum": "apps.backoffice.models.ReportKind",
+        "AssetPurposeEnum": "apps.catalog.models.AssetPurpose",
+        "ImageContentTypeEnum": [
+            ("image/png", "PNG"),
+            ("image/jpeg", "JPEG"),
+            ("image/webp", "WebP"),
+        ],
         "AssessmentStatusEnum": [
             ("DRAFT", "Draft"),
             ("SUBMITTED", "Submitted"),
@@ -662,6 +692,28 @@ NEWLY_APPROVED_DAYS = env.int("NEWLY_APPROVED_DAYS", default=14)
 PHYSICIAN_RESCHEDULE_MIN_HOURS = env.int("PHYSICIAN_RESCHEDULE_MIN_HOURS", default=1)
 PRESCRIPTION_MAX_START_DAYS = env.int("PRESCRIPTION_MAX_START_DAYS", default=30)
 PRESCRIPTION_MAX_VALIDITY_MONTHS = env.int("PRESCRIPTION_MAX_VALIDITY_MONTHS", default=12)
+# Part 5 (staff and admin portals). Runtime-editable values live in the
+# settings groups of apps.catalog.runtime; these are only the defaults.
+EVALUATION_URGENT_AFTER_HOURS = env.int("EVALUATION_URGENT_AFTER_HOURS", default=24)
+SUPPORT_FIRST_RESPONSE_SLA_MINUTES = env.int("SUPPORT_FIRST_RESPONSE_SLA_MINUTES", default=60)
+SUPPORT_AUTO_CLOSE_RESOLVED_DAYS = env.int("SUPPORT_AUTO_CLOSE_RESOLVED_DAYS", default=7)
+REFUND_APPROVAL_LIMIT = env("REFUND_APPROVAL_LIMIT", default="500.00")
+REFUND_FEE_ON_NOT_SUITABLE = env.bool("REFUND_FEE_ON_NOT_SUITABLE", default=False)
+REPORTING_CURRENCY = env("REPORTING_CURRENCY", default="PEN")
+STAFF_INVITATION_TTL_DAYS = env.int("STAFF_INVITATION_TTL_DAYS", default=7)
+PRIVACY_RESPONSE_DAYS = env.int("PRIVACY_RESPONSE_DAYS", default=20)
+PRIVACY_EXPORT_TTL_DAYS = env.int("PRIVACY_EXPORT_TTL_DAYS", default=7)
+REPORT_EXPORT_URL_TTL_SECONDS = env.int("REPORT_EXPORT_URL_TTL_SECONDS", default=10 * 60)
+PUBLIC_ASSET_BASE_URL = env("PUBLIC_ASSET_BASE_URL", default="")
+ASSET_MAX_BYTES = env.int("ASSET_MAX_BYTES", default=5 * 1024 * 1024)
+ASSET_MAX_PIXELS = env.int("ASSET_MAX_PIXELS", default=4000)
+PROGRAM_CATEGORIES = env.list(
+    "PROGRAM_CATEGORIES",
+    default=["MEDICAL_WEIGHT_LOSS", "LONGEVITY", "HORMONE_BALANCE", "CARDIOMETABOLIC"],
+)
+PACKAGE_SUPPLY_WEEKS = env.list("PACKAGE_SUPPLY_WEEKS", cast=int, default=[4, 12, 24])
+SUBSCRIPTION_PRICE_LOCK = env.bool("SUBSCRIPTION_PRICE_LOCK", default=True)
+REFILL_DUE_WINDOW_DAYS = env.int("REFILL_DUE_WINDOW_DAYS", default=7)
 LAB_SCANNER = env("LAB_SCANNER", default="apps.assessments.scanning.NoopLabScanner")
 
 # ---------------------------------------------------------------------------
@@ -691,6 +743,10 @@ CELERY_BEAT_SCHEDULE: dict[str, dict[str, object]] = {
     "subscriptions-renewals": {
         "task": "apps.orders.tasks.run_subscription_jobs",
         "schedule": 900.0,
+    },
+    "support-housekeeping": {
+        "task": "apps.support.tasks.run_support_jobs",
+        "schedule": 3600.0,
     },
 }
 

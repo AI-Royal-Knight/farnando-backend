@@ -7,9 +7,9 @@ and privacy controls are treated as product features.
 
 ## Phase status
 
-API contract Parts 1 (v1.2), 2, 3 and 4 (v1.0) are implemented. See
+API contract Parts 1 (v1.2), 2, 3, 4 and 5 (v1.0) are implemented. See
 `docs/contract-deviations.md` for the owner-review notes,
-`docs/figma-screens-part1.md` to `docs/figma-screens-part4.md` for the Figma
+`docs/figma-screens-part1.md` to `docs/figma-screens-part5.md` for the Figma
 review records, and `docs/open-items.md` for pending legal/clinical/content
 decisions.
 
@@ -19,7 +19,7 @@ decisions.
 | 2 | API Contract Part 2: programs, resumable assessments, questionnaire, measurements/BMI, screening, summary/submit/review/cancel, evaluation fee + Culqi port, lab uploads + scanning gate, patient evaluation and prescription download; audit log and idempotency | **Complete** |
 | 3 | API Contract Part 3: patient profile and addresses, overview, consultations and video, treatments, packages/checkout/orders, subscriptions, saved cards, signed Culqi/Daily webhooks, messaging, notifications | **Complete** |
 | 4 | API Contract Part 4: physician invitations and MFA, review queue and decisions with prescribing, My Patients and notes, treatment adjustments and renewals, clinician consultations, availability and calendar, clinician messaging | **Complete** |
-| 5 | API Contract Part 5: admin/staff orders, shipping, refunds, products, packages, content, support tickets, audited message access | Not started |
+| 5 | API Contract Part 5: staff invitations and permissions, staff/admin dashboards, patients, evaluation assignment, support tickets, complaints, orders, subscriptions, refunds; admin products, programs, packages, questionnaires, content, reference data, legal versions, settings, reports and exports, audit log, privacy requests | **Complete** |
 | 6 | Reports/analytics, performance/security hardening, final docs | Not started |
 
 ## Quick start (Docker, < 5 minutes)

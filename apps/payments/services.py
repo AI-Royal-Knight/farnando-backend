@@ -273,6 +273,7 @@ def _refund_succeeded(payment: Payment, refunded: Decimal | None) -> None:
         return
     total_refunded = refunded if refunded is not None else payment.amount
     total_refunded = min(max(total_refunded, payment.refunded_amount), payment.amount)
+    _settle_refunds(payment, total_refunded - payment.refunded_amount)
     payment.refunded_amount = total_refunded
     fully = total_refunded >= payment.amount
     payment.status = PaymentStatus.REFUNDED if fully else PaymentStatus.PARTIALLY_REFUNDED
@@ -284,6 +285,22 @@ def _refund_succeeded(payment: Payment, refunded: Decimal | None) -> None:
         from apps.orders import services as order_services
 
         order_services.on_payment_refunded(payment, fully=fully)
+
+
+def _settle_refunds(payment: Payment, newly_refunded: Decimal) -> None:
+    """Mark pending staff refunds as succeeded, oldest first (Part 5, 7.3)."""
+
+    from apps.payments.models import Refund, RefundStatus
+
+    remaining = newly_refunded
+    for refund in Refund.objects.filter(payment=payment, status=RefundStatus.PENDING).order_by(
+        "created_at"
+    ):
+        if remaining < refund.amount:
+            break
+        refund.status = RefundStatus.SUCCEEDED
+        refund.save(update_fields=["status", "updated_at"])
+        remaining -= refund.amount
 
 
 def _apply_daily(parsed: daily.ParsedEvent) -> None:

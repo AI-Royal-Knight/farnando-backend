@@ -82,6 +82,21 @@ messages.
 - With MFA enforced, every staff/admin/physician account (including demo
   accounts) must enrol on first login.
 
+### 2.4 Part 5 operations
+
+- Migrations seed Part 5 reference data (ticket categories, lab panels,
+  settings groups). Review `/admin/settings/{group}/` before launch; every
+  change needs a `reason` and is audited with old and new values.
+- Invite staff from `/admin/staff/`; members set their own password from the
+  emailed link (7 days, `STAFF_INVITATION_TTL_DAYS`) and must enrol MFA.
+- Beat must run `run_support_jobs` (hourly) to close tickets left `RESOLVED`
+  for `support.auto_close_resolved_days`.
+- Report exports and privacy access exports are written to private storage;
+  links expire after `REPORT_EXPORT_URL_TTL_SECONDS` and
+  `PRIVACY_EXPORT_TTL_DAYS`.
+- Privacy deletion anonymises the account and cannot be undone; the retained
+  records are listed in the request's `response_note`.
+
 ## 3. Migrations policy (expand/contract)
 
 Never combine a destructive schema change with the code that stops using the

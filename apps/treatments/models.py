@@ -70,6 +70,7 @@ class Product(BaseModel):
         max_length=16, choices=DoseFrequency.choices, default=DoseFrequency.WEEKLY
     )
     max_refills = models.PositiveSmallIntegerField(default=0)
+    lifestyle_essentials = models.JSONField(default=list, blank=True)
     programs = models.ManyToManyField("assessments.Program", blank=True, related_name="products")
 
     class Meta:

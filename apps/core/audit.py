@@ -21,6 +21,40 @@ def _client_ip(request: HttpRequest) -> str | None:
         return None
 
 
+_READ_SUFFIXES = ("viewed", "read", "listed", "packet_read", "chart_read")
+_SUFFIX_TYPES = {
+    "created": AuditLog.ActionType.CREATE,
+    "submitted": AuditLog.ActionType.CREATE,
+    "invited": AuditLog.ActionType.CREATE,
+    "account_created": AuditLog.ActionType.CREATE,
+    "deleted": AuditLog.ActionType.DELETE,
+    "revoked": AuditLog.ActionType.DELETE,
+    "downloaded": AuditLog.ActionType.DOWNLOAD,
+    "download": AuditLog.ActionType.DOWNLOAD,
+    "exported": AuditLog.ActionType.EXPORT,
+    "export": AuditLog.ActionType.EXPORT,
+    "permissions_changed": AuditLog.ActionType.PERMISSION_CHANGE,
+    "login": AuditLog.ActionType.LOGIN,
+}
+
+
+def action_type_for(action: str) -> str:
+    """Map a dotted event name (``patient.viewed``) to the contract enum."""
+
+    suffix = action.rsplit(".", 1)[-1]
+    if suffix in _READ_SUFFIXES or suffix.endswith("_viewed") or suffix.endswith("_read"):
+        return AuditLog.ActionType.READ
+    if suffix in _SUFFIX_TYPES:
+        return _SUFFIX_TYPES[suffix]
+    if suffix.endswith("_downloaded"):
+        return AuditLog.ActionType.DOWNLOAD
+    if suffix.endswith("_created"):
+        return AuditLog.ActionType.CREATE
+    if suffix.endswith("_deleted"):
+        return AuditLog.ActionType.DELETE
+    return AuditLog.ActionType.UPDATE
+
+
 def record_audit(
     *,
     actor: Any,
@@ -29,6 +63,9 @@ def record_audit(
     object_id: Any,
     request: Any = None,
     metadata: dict[str, Any] | None = None,
+    patient_id: Any = None,
+    changed_fields: list[str] | None = None,
+    action_type: str | None = None,
 ) -> AuditLog:
     django_request: HttpRequest | None = getattr(request, "_request", request)
     user_agent = ""
@@ -41,6 +78,9 @@ def record_audit(
     return AuditLog.objects.create(
         actor=actor if getattr(actor, "is_authenticated", False) else None,
         action=action,
+        action_type=action_type or action_type_for(action),
+        patient_id=patient_id,
+        changed_fields=list(changed_fields or []),
         object_type=object_type,
         object_id=str(object_id),
         request_id=request_id,

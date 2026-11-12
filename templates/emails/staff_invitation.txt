@@ -1,0 +1,9 @@
+Hello {{ full_name }},
+
+You have been invited to the Adelgaceya staff portal. Set your password with
+this single-use link (valid until {{ expires_at }}):
+
+{{ link }}
+
+You will be asked to set up two-factor authentication after signing in.
+If you did not expect this invitation, ignore this email.

@@ -213,6 +213,7 @@ class Consultation(BaseModel):
     )
     clinical_notes = EncryptedTextField(blank=True, default="")
     visit_summary = models.TextField(blank=True, default="")
+    needs_staff_attention = models.BooleanField(default=False, db_index=True)
     follow_up = models.JSONField(null=True, blank=True)
 
     class Meta:

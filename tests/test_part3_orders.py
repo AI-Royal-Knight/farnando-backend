@@ -280,7 +280,7 @@ def test_order_lifecycle_with_webhooks(
     response = place(auth_client, body)
     assert response.status_code == 201, response.json()
     order = response.json()
-    assert order["number"] == "ADL-ORD-0001"
+    assert order["number"] == "ADL-ORD-00001"
     assert order["status"] == "PENDING_PAYMENT"
     assert order["status_label"] == "Pending Payment"
     assert order["payment"]["status"] == "PENDING"
@@ -589,7 +589,7 @@ def test_subscription_renewal_success_and_retries(
     renewal_order = renewal.order
     assert renewal_order is not None
     assert renewal_order.status == "PRESCRIPTION_VERIFIED"
-    assert renewal_order.number == "ADL-ORD-0002"
+    assert renewal_order.number == "ADL-ORD-00002"
     treatment.refresh_from_db()
     assert treatment.refills_remaining == 0
     assert Notification.objects.filter(type="SUBSCRIPTION_RENEWED").exists()

@@ -103,6 +103,14 @@ _COPY: dict[str, dict[str, tuple[str, str]]] = {
             "Your credentials could not be verified",
             "Open your profile to see the details.",
         ),
+        NotificationType.PATIENT_ASSIGNED: (
+            "A patient was assigned to you",
+            "Open My Patients to see the new assignment.",
+        ),
+        NotificationType.PRIVACY_REQUEST_UPDATED: (
+            "Your privacy request was updated",
+            "Open your account settings to see the latest status.",
+        ),
     },
     "es": {
         NotificationType.EVALUATION_STATUS_CHANGED: (
@@ -192,6 +200,14 @@ _COPY: dict[str, dict[str, tuple[str, str]]] = {
         NotificationType.CREDENTIALS_REJECTED: (
             "No pudimos verificar tus credenciales",
             "Abre tu perfil para ver los detalles.",
+        ),
+        NotificationType.PATIENT_ASSIGNED: (
+            "Se te asignó un paciente",
+            "Abre Mis pacientes para ver la nueva asignación.",
+        ),
+        NotificationType.PRIVACY_REQUEST_UPDATED: (
+            "Tu solicitud de privacidad fue actualizada",
+            "Abre la configuración de tu cuenta para ver el estado.",
         ),
     },
 }

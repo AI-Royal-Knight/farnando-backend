@@ -139,6 +139,8 @@ class Program(BaseModel):
 
     slug = models.SlugField(max_length=80, unique=True)
     name = models.CharField(max_length=120)
+    category = models.CharField(max_length=40, blank=True, default="MEDICAL_WEIGHT_LOSS")
+    short_description = models.CharField(max_length=200, blank=True, default="")
     description = models.TextField(blank=True)
     icon = models.CharField(max_length=64, blank=True, default="")
     position = models.PositiveIntegerField(default=0, db_index=True)
@@ -148,6 +150,7 @@ class Program(BaseModel):
     # constants baked into code. Defaults are proposals and marked for review.
     requires_target_lower = models.BooleanField(default=True)
     min_bmi = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    max_bmi = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
     min_bmi_effect = models.CharField(
         max_length=16, choices=ScreeningEffect.choices, default=ScreeningEffect.NOT_ELIGIBLE
     )
@@ -169,8 +172,12 @@ class Program(BaseModel):
         max_digits=5, decimal_places=2, default=Decimal("1.00")
     )
     projection_disclaimer = models.TextField(default="Results are not guaranteed and may vary.")
-    estimated_review_hours_min = models.PositiveSmallIntegerField(default=24)
-    estimated_review_hours_max = models.PositiveSmallIntegerField(default=48)
+    projection_loss_percent_by_month = models.JSONField(
+        null=True, blank=True, help_text="[MEDICAL REVIEW] cumulative % loss per month."
+    )
+    # Null = use the global ``evaluation.estimated_review_hours`` setting.
+    estimated_review_hours_min = models.PositiveSmallIntegerField(null=True, blank=True)
+    estimated_review_hours_max = models.PositiveSmallIntegerField(null=True, blank=True)
     screening_message_eligible = models.TextField(
         default="Based on your answers, you may qualify for this program."
     )
@@ -225,7 +232,18 @@ class Program(BaseModel):
 
     @property
     def is_available(self) -> bool:
-        return self.questionnaires.filter(is_published=True).exists()
+        return self.questionnaires.filter(is_published=True, is_active=True).exists()
+
+    def review_hours(self) -> dict[str, int]:
+        if self.estimated_review_hours_min is not None and self.estimated_review_hours_max:
+            return {
+                "min": int(self.estimated_review_hours_min),
+                "max": int(self.estimated_review_hours_max),
+            }
+        from apps.catalog import runtime
+
+        hours = runtime.value("evaluation", "estimated_review_hours")
+        return {"min": int(hours["min"]), "max": int(hours["max"])}
 
     @property
     def published_questionnaire(self) -> QuestionnaireVersion | None:
@@ -242,13 +260,30 @@ class Program(BaseModel):
         return {"title": "", "message": ""}
 
 
+class QuestionnaireStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Draft"
+    PUBLISHED = "PUBLISHED", "Published"
+    ARCHIVED = "ARCHIVED", "Archived"
+
+
 class QuestionnaireVersion(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name="questionnaires")
     version = models.PositiveIntegerField()
+    title = models.CharField(max_length=120, blank=True, default="")
+    description = models.CharField(max_length=500, blank=True, default="")
+    status = models.CharField(
+        max_length=12, choices=QuestionnaireStatus.choices, default=QuestionnaireStatus.DRAFT
+    )
+    is_active = models.BooleanField(default=True)
     is_published = models.BooleanField(default=False, db_index=True)
     published_at = models.DateTimeField(null=True, blank=True)
+    publish_note = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-version"]
@@ -466,6 +501,16 @@ class Evaluation(BaseModel):
     rejection_reason_code = models.CharField(
         max_length=48, choices=RejectionReasonCode.choices, blank=True, default=""
     )
+    # Part 5: staff reservation (B3/B5) and priority (5.5).
+    assigned_physician = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reserved_evaluations",
+    )
+    priority = models.CharField(max_length=8, default="NORMAL")
+    priority_set_by_staff = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-submitted_at"]

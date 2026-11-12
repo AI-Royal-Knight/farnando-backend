@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.utils import timezone
 
+from apps.catalog import runtime
 from apps.consultations.clinicians import profile_for
 from apps.consultations.models import (
     OPEN_CONSULTATION_STATUSES,
@@ -174,7 +175,7 @@ def compute_slots(
 ) -> list[Slot]:
     now = now or timezone.now()
     earliest = (
-        now + timedelta(hours=settings.CONSULTATION_MIN_BOOKING_LEAD_HOURS)
+        now + timedelta(hours=runtime.hours("booking", "min_booking_lead_hours"))
         if apply_lead_time
         else now
     )

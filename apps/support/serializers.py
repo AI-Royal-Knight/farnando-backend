@@ -30,8 +30,17 @@ class ContactMessageSerializer(StrictSerializer):
 
 
 class ContactMessageResponseSerializer(serializers.Serializer[Any]):
-    id = serializers.UUIDField(read_only=True)
-    status = serializers.CharField(read_only=True)
+    ticket_reference = serializers.CharField(read_only=True, source="reference")
+    status = serializers.ChoiceField(
+        read_only=True,
+        choices=[
+            ("OPEN", "Open"),
+            ("IN_PROGRESS", "In progress"),
+            ("AWAITING_CUSTOMER", "Awaiting customer"),
+            ("RESOLVED", "Resolved"),
+            ("CLOSED", "Closed"),
+        ],
+    )
     created_at = serializers.DateTimeField(read_only=True)
 
 

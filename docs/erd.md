@@ -147,6 +147,24 @@ dates, signed document), `Product` (guardrails, programs), `Treatment`
 `AvailabilityRule` (kind, label, types), `AvailabilityBlock` (kind),
 `Subscription` (`needs_staff_review`).
 
+## Part 5 entities
+
+| Entity | App | Purpose / key rules |
+| --- | --- | --- |
+| `StaffProfile` / `StaffInvitation` | staff | Staff type and permissions; single-use hashed invitation token. |
+| `SupportTicket` / `TicketMessage` / `TicketHistory` | support | Ticket reference, category, priority, assignee, internal notes, status history. |
+| `TicketCategory` / `LabPanel` | catalog | Admin reference data; deactivated instead of deleted when in use. |
+| `PlatformSettings` | catalog | One row per settings group; validated JSON, audited writes. |
+| `AssetUpload` / `ContentItem` | catalog | Pre-signed, re-encoded images; landing-page content with draft/published state. |
+| `ReportExport` | backoffice | Requested CSV export, built by Celery, expiring link. |
+| `PrivacyRequest` | backoffice | Access export, rectification or deletion; `due_at` from `PRIVACY_RESPONSE_DAYS`. |
+
+Extended: `LegalDocument` (status, effective date, author), `AuditLog`
+(`action_type`, `patient_id`, `changed_fields`), `Evaluation` (assigned
+physician, priority), `QuestionnaireVersion` (status, active flag),
+`PatientProfile.assigned_physician`, `Package` (badge, cadence, display and
+cycle prices), `Consultation.needs_staff_attention`.
+
 ## Planned entities (not yet migrated)
 
 - Physician decision records, prescription PDFs and availability management

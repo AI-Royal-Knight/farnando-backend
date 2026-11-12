@@ -444,11 +444,7 @@ class EvaluationSerializer(serializers.ModelSerializer[Evaluation]):
         return list(ChecklistItemSerializer(services.evaluation_checklist(obj), many=True).data)
 
     def get_estimated_review_hours(self, obj: Evaluation) -> dict[str, int]:
-        program = obj.assessment.program
-        return {
-            "min": program.estimated_review_hours_min,
-            "max": program.estimated_review_hours_max,
-        }
+        return obj.assessment.program.review_hours()
 
     def get_status_title(self, obj: Evaluation) -> str:
         return services.evaluation_copy(obj)["title"]

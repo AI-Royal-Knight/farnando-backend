@@ -53,6 +53,8 @@ urlpatterns = [
     path("api/v1/", include("apps.messaging.urls")),
     path("api/v1/", include("apps.notifications.urls")),
     path("api/v1/", include("apps.clinical.urls")),
+    path("api/v1/", include("apps.staff.urls")),
+    path("api/v1/", include("apps.backoffice.urls")),
 ]
 
 if settings.DEBUG:

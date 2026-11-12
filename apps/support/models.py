@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import uuid
 
+from django.conf import settings
 from django.db import models
 
-from apps.catalog.models import ComplaintCategory
+from apps.catalog.models import ComplaintCategory, TicketCategory
+from apps.core.encryption import EncryptedTextField
 
 
 class ContactMessage(models.Model):
@@ -95,3 +97,154 @@ class ComplaintBookEntry(models.Model):
 
     def __str__(self) -> str:
         return self.complaint_number
+
+
+class ComplaintResponse(models.Model):
+    """Append-only staff response to a complaint (Part 5, 6.4)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    complaint = models.ForeignKey(
+        ComplaintBookEntry, on_delete=models.PROTECT, related_name="responses"
+    )
+    body = models.TextField()
+    resolution = models.CharField(max_length=16)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.complaint_id}:{self.resolution}"
+
+
+class ComplaintHistory(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    complaint = models.ForeignKey(
+        ComplaintBookEntry, on_delete=models.PROTECT, related_name="history"
+    )
+    from_status = models.CharField(max_length=16, blank=True, default="")
+    to_status = models.CharField(max_length=16)
+    note = models.TextField(blank=True, default="")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.complaint_id}:{self.to_status}"
+
+
+class TicketStatus(models.TextChoices):
+    OPEN = "OPEN", "Open"
+    IN_PROGRESS = "IN_PROGRESS", "In progress"
+    AWAITING_CUSTOMER = "AWAITING_CUSTOMER", "Awaiting customer"
+    RESOLVED = "RESOLVED", "Resolved"
+    CLOSED = "CLOSED", "Closed"
+
+
+class TicketPriority(models.TextChoices):
+    NORMAL = "NORMAL", "Normal"
+    URGENT = "URGENT", "Urgent"
+
+
+class TicketSource(models.TextChoices):
+    PATIENT = "PATIENT", "Patient"
+    CONTACT_FORM = "CONTACT_FORM", "Contact form"
+    STAFF = "STAFF", "Staff"
+
+
+class TicketSequence(models.Model):
+    year = models.PositiveIntegerField(unique=True)
+    last_number = models.PositiveIntegerField(default=0)
+
+    def __str__(self) -> str:
+        return f"{self.year}:{self.last_number}"
+
+
+class SupportTicket(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    reference = models.CharField(max_length=32, unique=True)
+    subject = models.CharField(max_length=120)
+    status = models.CharField(
+        max_length=20, choices=TicketStatus.choices, default=TicketStatus.OPEN, db_index=True
+    )
+    priority = models.CharField(
+        max_length=8, choices=TicketPriority.choices, default=TicketPriority.NORMAL
+    )
+    category = models.ForeignKey(TicketCategory, on_delete=models.PROTECT, related_name="tickets")
+    source = models.CharField(max_length=16, choices=TicketSource.choices)
+    requester_name = models.CharField(max_length=120)
+    requester_email = models.EmailField()
+    patient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="support_tickets",
+    )
+    order = models.ForeignKey(
+        "orders.Order", on_delete=models.SET_NULL, null=True, blank=True, related_name="tickets"
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_tickets",
+    )
+    first_response_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    source_ip = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "-created_at"]),
+            models.Index(fields=["patient", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.reference
+
+
+class TicketMessage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name="messages")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    author_role = models.CharField(max_length=10)
+    body = EncryptedTextField()
+    is_internal = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.ticket_id}:{self.author_role}"
+
+
+class TicketHistory(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name="history")
+    event = models.CharField(max_length=24)
+    from_value = models.CharField(max_length=64, blank=True, default="")
+    to_value = models.CharField(max_length=64, blank=True, default="")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.ticket_id}:{self.event}"

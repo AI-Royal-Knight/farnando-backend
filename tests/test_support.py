@@ -11,7 +11,7 @@ from django.core import mail
 from django.test import Client, override_settings
 from django.utils import timezone
 
-from apps.support.models import ComplaintBookEntry, ContactMessage
+from apps.support.models import ComplaintBookEntry, ContactMessage, SupportTicket, TicketMessage
 
 pytestmark = pytest.mark.django_db
 
@@ -55,9 +55,12 @@ def test_contact_message_creates_record_and_sends_emails(
         response = client.post(CONTACT_URL, contact_payload(), content_type="application/json")
     assert response.status_code == 201
     payload = response.json()
-    assert payload["status"] == "NEW"
-    assert payload["id"]
-    assert ContactMessage.objects.count() == 1
+    assert payload["status"] == "OPEN"
+    assert payload["ticket_reference"].startswith(f"TCK-{timezone.now().year}-")
+    ticket = SupportTicket.objects.get()
+    assert ticket.source == "CONTACT_FORM"
+    assert ticket.patient_id is None
+    assert ContactMessage.objects.count() == 0
     assert len(mail.outbox) == 2
     assert {message.to[0] for message in mail.outbox} == {"maria@example.com", "staff@example.com"}
 
@@ -69,7 +72,7 @@ def test_contact_message_strips_html_and_rejects_unknown_fields(client: Client) 
         content_type="application/json",
     )
     assert response.status_code == 201
-    assert "<script>" not in ContactMessage.objects.get().message
+    assert "<script>" not in TicketMessage.objects.get().body
 
     unknown = client.post(
         CONTACT_URL, contact_payload(subject="hello"), content_type="application/json"

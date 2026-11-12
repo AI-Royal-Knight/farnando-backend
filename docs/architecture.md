@@ -193,6 +193,22 @@ also use it. No exception message or traceback is returned to clients.
 - **Beat job** `run_clinical_jobs` (15 min): release idle claims and apply due
   treatment versions.
 
+## 5.4 Staff and admin portals (Part 5)
+
+- **`apps.staff`** holds staff invitations, profiles and permissions, the
+  staff dashboard and the staff views over patients, evaluations, tickets,
+  complaints, orders, subscriptions and refunds. `apps/staff/api.py` provides
+  the shared view helpers (`doc`, `params`, `page`, `validated`,
+  `idempotent`) and `PortalSchema`, which derives operation ids from the view
+  class name.
+- **`apps.backoffice`** holds the admin catalog editors, the questionnaire
+  editor, content and assets, reference data, legal versions, settings
+  groups, reports and CSV exports, the audit log and privacy requests.
+- **Runtime settings** live in `PlatformSettings` groups and are read through
+  `apps.catalog.runtime`, falling back to environment defaults.
+- **Beat job** `run_support_jobs` (hourly): auto-close resolved tickets.
+  Report exports run as a Celery task after commit.
+
 ## 6. Identity and authentication
 
 - Custom `accounts.User` with UUID PK, lowercase-unique email, `role`

@@ -334,6 +334,24 @@ class InvitationAlreadyUsed(ApplicationError):
     default_code = "invitation_already_used"
 
 
+class AssignedToOther(ApplicationError):
+    status_code = 409
+    default_detail = "This evaluation is reserved for another physician."
+    default_code = "assigned_to_other"
+
+
+class PhysicianNotEligible(ApplicationError):
+    status_code = 409
+    default_detail = "This physician cannot take this assignment."
+    default_code = "physician_not_eligible"
+
+
+class PriceMismatch(ApplicationError):
+    status_code = 400
+    default_detail = "The charge per cycle does not match the monthly price."
+    default_code = "price_mismatch"
+
+
 _STATUS_CODES = {
     status.HTTP_400_BAD_REQUEST: "validation_error",
     status.HTTP_401_UNAUTHORIZED: "not_authenticated",
@@ -404,6 +422,9 @@ _DEFAULT_MESSAGES = {
     "invitation_expired": "This invitation has expired.",
     "invitation_revoked": "This invitation was revoked.",
     "invitation_already_used": "This invitation was already used.",
+    "assigned_to_other": "This evaluation is reserved for another physician.",
+    "physician_not_eligible": "This physician cannot take this assignment.",
+    "price_mismatch": "The charge per cycle does not match the monthly price.",
     "unsupported_media_type": "Unsupported media type.",
     "throttled": "Request was throttled.",
     "service_unavailable": "The service is temporarily unavailable.",
@@ -519,6 +540,9 @@ _MESSAGES_ES = {
     "invitation_expired": "Esta invitación ha expirado.",
     "invitation_revoked": "Esta invitación fue revocada.",
     "invitation_already_used": "Esta invitación ya fue utilizada.",
+    "assigned_to_other": "Esta evaluación está reservada para otro médico.",
+    "physician_not_eligible": "Este médico no puede recibir esta asignación.",
+    "price_mismatch": "El cobro por ciclo no coincide con el precio mensual.",
     "unsupported_media_type": "Tipo de contenido no soportado.",
     "throttled": "La solicitud fue limitada.",
     "service_unavailable": "El servicio no está disponible temporalmente.",

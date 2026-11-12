@@ -167,6 +167,25 @@ consume numbers.
   encrypted and never returned to patients.
 - Avatars are decoded and re-encoded without metadata; uploads are size-capped.
 
+## 8.3 Back office (Part 5)
+
+- `/admin/*` is `ADMIN`-only. Staff endpoints check the permission named on
+  each view; `CLINICAL_READ` gates any health information and a missing
+  permission returns `403 permission_denied` with `details.required`.
+- Staff invitations: random single-use tokens stored hashed; admins never set
+  passwords. Lookup, accept and resend are throttled.
+- Refunds above `payments.refund_approval_limit` need an admin; refunds and
+  order transitions use `Idempotency-Key`, evaluation assignment uses
+  `If-Match`.
+- Content images go through pre-signed upload, then are decoded and
+  re-encoded without metadata (`apps/core/images.py`).
+- Every write, detail read of patient data, export and settings change is
+  audited; successful logins are recorded as `LOGIN`. The audit log is
+  append-only and read-only through the API.
+- Privacy requests (Ley N.° 29733): patients file at most 3 a day; access
+  exports use expiring links; deletion anonymises identifiers and keeps the
+  records the law requires.
+
 ## 9. Encryption and secrets
 
 - TLS everywhere; HSTS in production.

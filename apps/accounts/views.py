@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
 from django.http import Http404
 from drf_spectacular.utils import OpenApiExample, extend_schema
@@ -55,7 +55,9 @@ from apps.accounts.services import (
     RegistrationService,
 )
 from apps.accounts.throttles import PasswordResetEmailThrottle
+from apps.core.audit import record_audit
 from apps.core.exceptions import (
+    AccountDisabled,
     ConsentRequiredInput,
     TokenInvalid,
 )
@@ -142,6 +144,21 @@ class RegisterView(APIView):
         return Response(auth_response(result.user), status=status.HTTP_201_CREATED)
 
 
+def _logged_in(user: User, request: Request, body: dict[str, Any], method: str) -> dict[str, Any]:
+    """Record a LOGIN audit entry once tokens are issued (deviation 129)."""
+
+    if "tokens" in body:
+        record_audit(
+            actor=user,
+            action="auth.login",
+            object_type="User",
+            object_id=user.pk,
+            request=request,
+            metadata={"method": method},
+        )
+    return body
+
+
 class LoginView(APIView):
     permission_classes = [AllowAny]
     throttle_scope = "auth"
@@ -162,7 +179,9 @@ class LoginView(APIView):
     def post(self, request: Request) -> Response:
         serializer = LoginSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
-        return Response(auth_response(serializer.user))
+        return Response(
+            _logged_in(serializer.user, request, auth_response(serializer.user), "PASSWORD")
+        )
 
 
 class RefreshView(APIView):
@@ -315,8 +334,12 @@ class GoogleLoginView(APIView):
             )
         except GoogleLoginError as exc:
             raise ValidationError({"id_token": exc.messages[0]}) from exc
+        if not result.user.is_active:
+            # Suspended or anonymised accounts must not regain access via Google.
+            raise AccountDisabled()
+        body = auth_response(result.user, is_new_user=result.is_new_user)
         return Response(
-            auth_response(result.user, is_new_user=result.is_new_user),
+            _logged_in(result.user, request, body, "GOOGLE"),
             status=status.HTTP_201_CREATED if result.is_new_user else status.HTTP_200_OK,
         )
 
@@ -472,7 +495,9 @@ class MfaVerifyView(APIView):
         user = verify_challenge(
             serializer.validated_data["mfa_token"], serializer.validated_data["code"]
         )
-        return Response(token_payload(user))
+        if not user.is_active:
+            raise AccountDisabled()
+        return Response(_logged_in(user, request, token_payload(user), "MFA"))
 
 
 class MfaSetupView(APIView):

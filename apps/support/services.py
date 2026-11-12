@@ -6,13 +6,13 @@ import ipaddress
 from datetime import timedelta
 from typing import Any
 
-from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest
 from django.utils import timezone
 
+from apps.catalog import runtime
 from apps.catalog.models import ComplaintCategory
-from apps.support.models import ComplaintBookEntry, ComplaintSequence, ContactMessage
+from apps.support.models import ComplaintBookEntry, ComplaintSequence, SupportTicket
 
 
 def client_ip(request: HttpRequest) -> str | None:
@@ -26,17 +26,13 @@ def client_ip(request: HttpRequest) -> str | None:
 
 
 class ContactMessageService:
+    """Amendment B2: contact-form submissions open a support ticket."""
+
     @staticmethod
-    def create(*, data: dict[str, Any], request: HttpRequest) -> ContactMessage:
-        message = ContactMessage.objects.create(
-            full_name=data["full_name"].strip(),
-            email=data["email"],
-            message=data["message"],
-            source_ip=client_ip(request),
-            user_agent=request.META.get("HTTP_USER_AGENT", "")[:1024],
-        )
-        transaction.on_commit(lambda: _send_contact_emails(str(message.pk)))
-        return message
+    def create(*, data: dict[str, Any], request: HttpRequest) -> SupportTicket:
+        from apps.support.tickets import create_contact_ticket
+
+        return create_contact_ticket(data=data, source_ip=client_ip(request))
 
 
 class ComplaintService:
@@ -71,18 +67,13 @@ class ComplaintService:
             document_type=data.get("document_type", ""),
             document_number=data.get("document_number", ""),
             phone=data.get("phone", ""),
-            response_due_at=now + timedelta(hours=settings.COMPLAINT_RESPONSE_SLA_HOURS),
+            response_due_at=now
+            + timedelta(hours=runtime.hours("complaints", "response_sla_hours")),
             source_ip=client_ip(request),
             user_agent=request.META.get("HTTP_USER_AGENT", "")[:1024],
         )
         transaction.on_commit(lambda: _send_complaint_emails(str(entry.pk)))
         return entry
-
-
-def _send_contact_emails(contact_id: str) -> None:
-    from apps.support.tasks import send_contact_message_emails
-
-    send_contact_message_emails.delay(contact_id)
 
 
 def _send_complaint_emails(complaint_id: str) -> None:

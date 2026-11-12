@@ -38,6 +38,9 @@ class NotificationType(models.TextChoices):
     RENEWAL_REQUESTED = "RENEWAL_REQUESTED", "Renewal requested"
     CREDENTIALS_VERIFIED = "CREDENTIALS_VERIFIED", "Credentials verified"
     CREDENTIALS_REJECTED = "CREDENTIALS_REJECTED", "Credentials rejected"
+    # Part 5.
+    PATIENT_ASSIGNED = "PATIENT_ASSIGNED", "Patient assigned"
+    PRIVACY_REQUEST_UPDATED = "PRIVACY_REQUEST_UPDATED", "Privacy request updated"
 
 
 class Notification(BaseModel):

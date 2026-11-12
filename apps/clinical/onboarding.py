@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import secrets
 import uuid
 from datetime import timedelta
@@ -32,11 +31,10 @@ from apps.core.exceptions import (
     ReadOnlyField,
     UnknownField,
 )
+from apps.core.images import IMAGE_EXT as AVATAR_EXT
 from apps.core.storage import delete_object, object_exists, presigned_upload_url, presigned_url
 from apps.patients.services import valid_timezone, validate_e164
 
-AVATAR_TYPES = {"image/png": "PNG", "image/jpeg": "JPEG", "image/webp": "WEBP"}
-AVATAR_EXT = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
 UPLOAD_TTL = 15 * 60
 
 
@@ -216,7 +214,7 @@ def start_avatar_upload(
 def confirm_avatar(upload: AvatarUpload) -> AvatarUpload:
     """Decode, cap dimensions, drop metadata and re-encode the image in place."""
 
-    from PIL import Image, UnidentifiedImageError
+    from apps.core.images import ImageRejected, sanitize_image
 
     if upload.status != Status.PENDING_UPLOAD:
         raise InvalidStateTransition()
@@ -229,39 +227,16 @@ def confirm_avatar(upload: AvatarUpload) -> AvatarUpload:
         upload.save(update_fields=["status", "updated_at"])
         raise FileTooLarge()
     try:
-        with Image.open(io.BytesIO(raw)) as probe:
-            probe.verify()
-        image: Image.Image = Image.open(io.BytesIO(raw))
-        image.load()
-    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
+        clean, content_type = sanitize_image(raw, max_pixels=settings.AVATAR_MAX_PIXELS)
+    except ImageRejected as exc:
         upload.status = Status.REJECTED
         upload.save(update_fields=["status", "updated_at"])
-        raise ValidationError({"upload": ["The file is not a valid image."]}) from exc
-    if image.format not in AVATAR_TYPES.values():
-        upload.status = Status.REJECTED
-        upload.save(update_fields=["status", "updated_at"])
-        raise ValidationError({"upload": ["Unsupported image type."]})
-    limit = settings.AVATAR_MAX_PIXELS
-    if image.width > limit or image.height > limit:
-        upload.status = Status.REJECTED
-        upload.save(update_fields=["status", "updated_at"])
-        raise ValidationError({"upload": [f"Images must be at most {limit} px per side."]})
-    target_format = image.format
-    if target_format == "JPEG" and image.mode not in ("RGB", "L"):
-        image = image.convert("RGB")
-    # Copy pixels only: EXIF, ICC, XMP and text chunks are not carried over.
-    clean = Image.new(image.mode, image.size)
-    clean.putdata(list(image.getdata()))
-    if image.mode == "P" and image.getpalette():
-        clean.putpalette(image.getpalette() or [])
-    buffer = io.BytesIO()
-    clean.save(buffer, format=target_format)
+        raise ValidationError({"upload": [str(exc)]}) from exc
     delete_object(upload.storage_key)
-    default_storage.save(upload.storage_key, ContentFile(buffer.getvalue()))
-    content_type = next(key for key, value in AVATAR_TYPES.items() if value == target_format)
+    default_storage.save(upload.storage_key, ContentFile(clean))
     upload.status = Status.READY
     upload.content_type = content_type
-    upload.size_bytes = len(buffer.getvalue())
+    upload.size_bytes = len(clean)
     upload.save(update_fields=["status", "content_type", "size_bytes", "updated_at"])
     return upload
 

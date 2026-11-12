@@ -21,6 +21,18 @@ STAFF_ALERTS = {
         "Evaluation declined",
         "A physician declined an evaluation. Review the fee refund rule.",
     ),
+    "physician_suspended": (
+        "Consultations need a new physician",
+        "A physician was suspended. Confirmed consultations are flagged for staff.",
+    ),
+    "privacy_request_received": (
+        "Privacy request received",
+        "A patient filed a privacy request. Open the admin privacy queue.",
+    ),
+    "refund_task_created": (
+        "Refund to review",
+        "A refund task was created. Open the support tickets to process it.",
+    ),
     "subscription_needs_review": (
         "Subscription needs review",
         "A treatment was discontinued and a subscription needs staff review.",

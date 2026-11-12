@@ -362,7 +362,7 @@ def test_overview_approved(auth_client: APIClient, patient_user: User, physician
         user=patient_user,
         treatment=treatment,
         package=package(),
-        number="ADL-ORD-0500",
+        number="ADL-ORD-00500",
         status="COMPOUNDING",
         placed_at=timezone.now(),
         subtotal="1",

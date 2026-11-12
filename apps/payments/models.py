@@ -67,3 +67,43 @@ class WebhookEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.provider}:{self.provider_event_id}"
+
+
+class RefundReason(models.TextChoices):
+    CUSTOMER_REQUEST = "CUSTOMER_REQUEST", "Customer request"
+    NOT_SUITABLE_GUARANTEE = "NOT_SUITABLE_GUARANTEE", "Not suitable guarantee"
+    PRODUCT_ISSUE = "PRODUCT_ISSUE", "Product issue"
+    DELIVERY_ISSUE = "DELIVERY_ISSUE", "Delivery issue"
+    DUPLICATE_PAYMENT = "DUPLICATE_PAYMENT", "Duplicate payment"
+    OTHER = "OTHER", "Other"
+
+
+class RefundStatus(models.TextChoices):
+    PENDING = "PENDING", "Pending"
+    SUCCEEDED = "SUCCEEDED", "Succeeded"
+    FAILED = "FAILED", "Failed"
+
+
+class Refund(BaseModel):
+    """A staff-initiated refund (Part 5, 7.3). The payment changes on the webhook."""
+
+    payment = models.ForeignKey(
+        "assessments.Payment", on_delete=models.CASCADE, related_name="refunds"
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3)
+    reason_code = models.CharField(max_length=32, choices=RefundReason.choices)
+    note = models.TextField(blank=True, default="")
+    status = models.CharField(
+        max_length=12, choices=RefundStatus.choices, default=RefundStatus.PENDING, db_index=True
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    provider_refund_id = models.CharField(max_length=120, blank=True, default="")
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"refund:{self.payment_id}:{self.amount}"

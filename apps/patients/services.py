@@ -275,6 +275,9 @@ def care_team_users(user: User) -> list[User]:
         if physician.is_active:
             members.setdefault(physician.pk, physician)
     profile = get_or_create_profile(user)
+    assigned = profile.assigned_physician
+    if assigned is not None and assigned.is_active:
+        members = {assigned.pk: assigned, **members}
     nurse = profile.assigned_nurse
     if nurse is not None and nurse.is_active:
         members.setdefault(nurse.pk, nurse)

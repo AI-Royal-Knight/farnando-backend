@@ -50,7 +50,9 @@ class PublicFAQView(APIView):
         responses={200: FAQSerializer(many=True), **COMMON_ERRORS},
     )
     def get(self, request: Request) -> Response:
-        return _public_cache(Response(FAQSerializer(FAQ.objects.all(), many=True).data))
+        return _public_cache(
+            Response(FAQSerializer(FAQ.objects.filter(is_published=True), many=True).data)
+        )
 
 
 class PublicTestimonialsView(APIView):

@@ -1,0 +1,5 @@
+Hola {{ full_name }},
+
+{{ body }}
+
+Adelgaceya

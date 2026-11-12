@@ -1,0 +1,7 @@
+Hola {{ full_name }},
+
+Respuesta a su reclamo {{ complaint_number }} del Libro de Reclamaciones:
+
+{{ body }}
+
+Adelgaceya

@@ -307,6 +307,12 @@ def compute_screening(assessment: Assessment) -> ScreeningResult | None:
         and measurement.bmi < program.min_bmi
     ):
         effects.append(program.min_bmi_effect)
+    if (
+        measurement is not None
+        and program.max_bmi is not None
+        and measurement.bmi > program.max_bmi
+    ):
+        effects.append(program.min_bmi_effect)
     if ScreeningEffect.NOT_ELIGIBLE in effects:
         return ScreeningResult.NOT_ELIGIBLE
     if ScreeningEffect.NEEDS_REVIEW in effects:
@@ -646,6 +652,9 @@ def projection_for(
 ) -> tuple[dict[str, Any], int]:
     """Illustrative projection (Part 2, 3.8) and the estimated timeline in weeks."""
 
+    percents = program.projection_loss_percent_by_month
+    if isinstance(percents, list) and percents:
+        return _percent_projection(program, measurement, [Decimal(str(p)) for p in percents])
     weekly = program.projection_weekly_loss_kg or Decimal("0")
     goal = measurement.weight_goal_kg
     timeline_weeks = max(1, math.ceil(float(goal / weekly))) if weekly > 0 and goal > 0 else 0
@@ -667,6 +676,32 @@ def projection_for(
     return projection, timeline_weeks
 
 
+def _percent_projection(
+    program: Program, measurement: AssessmentMeasurement, percents: list[Decimal]
+) -> tuple[dict[str, Any], int]:
+    """Projection from admin-configured cumulative loss percentages (Part 5, 8.2)."""
+
+    current = measurement.current_weight_kg
+    target = measurement.target_weight_kg
+    points: list[dict[str, Any]] = []
+    last = current
+    reached_month = 0
+    for month, percent in enumerate(percents, start=1):
+        projected = max(target, current * (Decimal("1") - percent / Decimal("100")))
+        last = projected
+        if reached_month == 0 and projected <= target:
+            reached_month = month
+        points.append({"month": month, "weight_kg": float(_q(projected, 2))})
+    timeline_weeks = math.ceil((reached_month or len(percents)) * 4.345)
+    projection = {
+        "months": len(percents),
+        "projected_loss_kg": float(_q(current - last, 2)),
+        "points": points,
+        "disclaimer": program.projection_disclaimer,
+    }
+    return projection, timeline_weeks
+
+
 class EvaluationService:
     ALLOWED_TRANSITIONS: dict[str, set[str]] = {
         EvaluationStatus.SCREENED_OUT: {
@@ -679,6 +714,7 @@ class EvaluationService:
         },
         EvaluationStatus.SUBMITTED: {
             EvaluationStatus.IN_REVIEW,
+            EvaluationStatus.PENDING_LABS,
             EvaluationStatus.CANCELLED,
         },
         EvaluationStatus.IN_REVIEW: {

@@ -61,6 +61,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     date_joined = models.DateTimeField(default=timezone.now)
+    # Part 5: suspension for every role (staff, physicians, patients).
+    suspended_at = models.DateTimeField(null=True, blank=True)
+    suspension_reason = models.TextField(blank=True, default="")
 
     objects = UserManager()
 
@@ -149,8 +152,14 @@ class LegalDocument(models.Model):
     version = models.CharField(max_length=32)
     title = models.CharField(max_length=200)
     sections = models.JSONField(default=list)
-    published_at = models.DateTimeField(default=timezone.now)
+    published_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
     is_current = models.BooleanField(default=False, db_index=True)
+    # Part 5, 9.3: drafts have a provisional version until published.
+    status = models.CharField(max_length=12, default="PUBLISHED", db_index=True)
+    effective_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
 
     class Meta:
         ordering = ["document_type"]

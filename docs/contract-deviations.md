@@ -701,3 +701,416 @@ A7 are applied.
 
 98. **Figma review (Part 4, section 10).** Recorded in
     `docs/figma-screens-part4.md`; no API impact.
+
+## Part 5 (v1.0) — staff and admin portals
+
+These items were recorded before the Part 5 code was written. Configurable
+values are listed in `docs/open-items.md` under "API Contract Part 5".
+
+99. **Where staff data lives.** A new `apps.staff` app holds `StaffProfile`
+    (one per `STAFF` user: `staff_type`, `permissions[]`, `status`, `phone`,
+    suspension fields) and `StaffInvitation`. `ADMIN` users have no profile and
+    always hold every permission. A data migration gives every existing `STAFF`
+    user a profile: nurses (`ClinicianProfile.care_role = NURSE`) get the
+    `NURSE` bundle and everyone else the `SUPPORT_AGENT` bundle (`[OPEN]`). A
+    `STAFF` user without a profile has no permissions.
+
+100. **Account status.** `INVITED` staff accounts have an unusable password and
+     `is_active = false` until they accept. `SUSPENDED` (staff, physicians and
+     patients) sets `is_active = false`, which makes access tokens fail at once
+     because the JWT layer rejects inactive users, and blacklists every
+     refresh token. Reactivation sets `is_active = true` again. `User` gains
+     `suspended_at` and `suspension_reason` for every role.
+
+101. **Staff invitations.** These follow the physician-invitation model: only
+     the SHA-256 of the token is stored, and the token lives
+     `STAFF_INVITATION_TTL_DAYS` days (default 7, `[OPEN]`). The raw token is
+     created inside the email task, so it never appears in task arguments or
+     API responses. Resending rotates the token. `DELETE` on an `INVITED`
+     account revokes the invitation and removes the placeholder user, which
+     has no data. The invitation keeps the email and name for the audit trail.
+     Accepting requires current `TERMS_OF_SERVICE` and `PRIVACY_POLICY` consent
+     and always returns `mfa_enrollment_required: true`. Physician invitations
+     created through the API now get their email through the same rotating-token
+     task.
+
+102. **Permission checks.** Each check verifies the role first; a wrong role
+     gets `403 permission_denied` with empty `details`. Then it checks the
+     permission; a missing one gets `403 permission_denied` with
+     `details.required`. `/admin/staff/*` manages `STAFF` accounts only, not
+     admins. An admin trying to suspend or reactivate themselves, or to change
+     their own permissions, gets `403 permission_denied` with
+     `details.reason = "self"`.
+
+103. **Physician management.** `account_status` is `ACTIVE` or `SUSPENDED`,
+     taken from the user. Physician accounts only exist after an invitation is
+     accepted, so `status=INVITED` returns an empty page; pending invitations
+     are listed by `GET /admin/physician-invitations/`. Card stats:
+     `assigned_evaluations_count` counts open evaluations the physician holds
+     or that are reserved for them; `active_patients_count` counts distinct
+     patients with an `ACTIVE` treatment they prescribed;
+     `consultations_this_month` counts non-cancelled consultations in the
+     current Lima month. `average_review_hours` is the mean of
+     `decided_at - submitted_at` over the last 30 days.
+     `last_active_at = last_login`. Suspending a physician has these effects:
+     - the physician is hidden from patient search;
+     - their `IN_REVIEW` evaluations return to `SUBMITTED`;
+     - their `PENDING_LABS` evaluations lose their physician;
+     - evaluations reserved for them are released, or re-reserved for
+       `reassign_to_physician_id`, which must be eligible;
+     - `CONFIRMED` consultations get `needs_staff_attention = true`, and a
+       PHI-free staff alert is emailed.
+     Changing credentials updates `User.full_name`, `display_name` and
+     `license_label`.
+
+104. **Staff dashboard.** `avg_first_response_minutes` covers tickets created
+     in the last 30 days that have a first response. A stat is `null` when the
+     caller lacks its permission:
+
+     | Stat | Permission |
+     |---|---|
+     | `unassigned_evaluations_count` | `EVALUATIONS_READ` |
+     | `open_tickets_count` | `TICKETS_MANAGE` |
+     | `orders_processing_count` | `ORDERS_READ` |
+     | `avg_first_response_minutes` | `TICKETS_MANAGE` |
+
+     The list blocks are empty arrays without the matching permission. Urgent
+     tickets in clinical categories show `subject = "Clinical: restricted"` and
+     an empty `excerpt` to staff without clinical access.
+
+105. **Admin patient status.** The status is derived, in this order:
+     1. `SUSPENDED`: the account is suspended.
+     2. `ACTIVE`: the patient has an `ACTIVE` treatment or an open
+        subscription (`ACTIVE`, `PAUSED` or `PAST_DUE`).
+     3. `NOT_SUITABLE`: the latest evaluation is `NOT_SUITABLE` or
+        `SCREENED_OUT`.
+     4. `INACTIVE`: the patient had an approval or a treatment before.
+     5. `PENDING`: everyone else, including patients with no evaluation yet.
+
+     `last_activity_at` is the greatest of `last_login`, `date_joined`, the
+     latest evaluation submission and the latest order. `plan_label` is the
+     active treatment's medication name plus the package length ("3-Mo") when
+     there is a subscription. `renews_on` is the subscription's next billing
+     date.
+
+106. **Care physician.** `PatientProfile` gains `assigned_physician`. In
+     `StaffPatientRow.assigned_physician` it takes priority. Without it, the
+     row falls back to the prescribing physician of the newest treatment, then
+     to the physician of the newest evaluation. Assignment gives the physician
+     a care relationship (My Patients, messaging). The physician gets the new
+     notification type `PATIENT_ASSIGNED`, added because section 1 of Part 3 has
+     no suitable type. "Accepting patients" means
+     `accepting_new_consultations`.
+
+107. **Patient detail.** The four `stats` are `orders_count`,
+     `consultations_count`, `evaluations_count` and `last_login`.
+     `plan.current_week` counts weeks since `started_at`, capped at
+     `total_weeks`. `total_weeks` is the treatment's `duration_weeks`, or the
+     package's `supply_duration_weeks`, or 12. `phase_label` is `null`
+     (`[OPEN]`, no clinical source for "Titration Phase"). The timeline merges
+     evaluation, order, consultation and ticket history with generic titles
+     only. With `CLINICAL_READ`, `clinical_notes_summary` is the start of the
+     newest clinical note (at most 280 characters). Every detail read is
+     audit-logged as `patient.viewed`, with `clinical: true|false`.
+
+108. **Patient suspension** pauses `ACTIVE` subscriptions with no resume date.
+     Reactivation does not resume them; the patient resumes them (`[OPEN]`). No
+     default bundle includes `PATIENTS_MANAGE`, so only admins can suspend
+     unless an admin grants it (`[OPEN]` 13.4.5).
+
+109. **Reserved evaluations (B3, B5).** `Evaluation` gains
+     `assigned_physician` (the reservation), `priority` and
+     `priority_set_by_staff`. The physician queue shows `SUBMITTED`,
+     unclaimed evaluations that are either reserved for the caller, or
+     unreserved in a program open to the caller's specialty. A program with no
+     allowed specialties is still open to every verified physician, because
+     legacy programs were created before 8.2 made specialties required.
+     Claiming one reserved for someone else returns `409 assigned_to_other`
+     (new code). When a physician releases a claim, or the claim times out,
+     the reservation is cleared if it was theirs, so the evaluation does not
+     disappear from every queue. Staff assignment is refused on `PENDING_LABS`
+     (`409 invalid_state_transition`). Assigning an `IN_REVIEW` evaluation to
+     the physician who already holds it only records the reservation.
+
+110. **Urgency.** `priority` is computed when read. It is `URGENT` when staff
+     set it, or when the evaluation is `SUBMITTED` or `IN_REVIEW` and was
+     submitted more than `urgent_after_hours` ago. If staff set it to
+     `NORMAL`, the time rule no longer applies. The `priority` filter uses the
+     same expression.
+
+111. **Recommended physicians.** Candidates are verified physicians who accept
+     new consultations and whose specialty is allowed for the program. The
+     score (0–100) is the sum of four weighted inputs (`[OPEN]`):
+
+     | Input | Points |
+     |---|---|
+     | Specialty match | 40 |
+     | Queue size (open evaluations held or reserved) | up to 30, fewer for a longer queue |
+     | Free slots in the next 24 hours | 15 |
+     | Fast average review time over 30 days | up to 15 |
+
+     The list item's `recommended_physician` is the top candidate.
+
+112. **Lab panels.** A new `LabPanel` reference table (9.2) replaces the union
+     of per-program `lab_panels` as the catalog. A migration seeds it from the
+     existing programs. Part 4's catalog endpoint and request-labs now read it,
+     and so does staff request-labs. Staff request-labs uses the same effects
+     as Part 4, 4.5.
+
+113. **Reopen (5.7)** moves an evaluation to `SUBMITTED` when the program fee
+     is waived or zero. The fee is then marked `WAIVED` or `NOT_REQUIRED`.
+     Otherwise it moves to `AWAITING_PAYMENT` and the fee becomes `PENDING`
+     with the program's current amount. The review request is marked resolved.
+
+114. **Support tickets.** The new models are `SupportTicket`,
+     `TicketMessage`, `TicketCategory`, `TicketSequence` and
+     `TicketHistory`. Reference numbers use `TCK-YYYY-NNNNNN` with a per-year
+     counter in a locked row.
+
+     **Contact-form tickets (B2):**
+     - The ticket has category `OTHER`, source `CONTACT_FORM` and no
+       `patient_id`, even when an account uses that email: the email is not
+       verified.
+     - The subject is "Contact form message".
+     - `ContactMessage` stays only for historical rows.
+
+     **Visibility and status:**
+     - Clinical-category tickets are hidden (`404`) from staff without
+       `CLINICAL_READ` or `MESSAGES_CLINICAL`. In lists they show
+       `subject = "Clinical: restricted"`.
+     - A patient message on a `CLOSED` ticket returns
+       `409 invalid_state_transition`.
+     - Setting a ticket to its current status is a `409`.
+     - `RESOLVED` sets `resolved_at`, and reopening clears it.
+
+     **Other behaviour:**
+     - `view=CHAT` returns the same detail payload, without `history`.
+     - Public replies to patients send the `SUPPORT_TICKET_REPLY`
+       notification with generic text.
+     - Replies to contact-form tickets are emailed with the staff text, from
+       the `ticket_reply_contact` template.
+     - Auto-close runs in the support beat job.
+
+115. **Complaints.** The new models are `ComplaintResponse` (append-only) and
+     `ComplaintHistory`. `responded_at` is set by the first response. A
+     complaint `is_overdue` when `response_due_at` has passed, there is no
+     response yet, and it is not `RESOLVED` or `CLOSED`. A respond email sends
+     the response text to the complainant, since it is their own legal record.
+     The status endpoint cannot move a complaint to `RECEIVED`.
+
+116. **Staff orders.**
+     - **Labels:** `product_label` is the first item's name. `dosage_label`
+       combines the treatment dose, the route and the package name.
+     - **Notes:** internal notes are a new append-only `OrderNote`.
+     - **Cancel:** staff may cancel `COMPOUNDING` orders (cancellation is
+       allowed before `IN_TRANSIT`), so `COMPOUNDING → CANCELLED` was added to
+       the state machine. A paid cancelled order gets a **refund task**: an
+       internal `BILLING` ticket (source `STAFF`, linked `order_id`). A holder
+       of `ORDERS_REFUND` then runs 7.3. The patient's own cancellation keeps
+       its automatic refund (Part 3).
+     - **Detail:** `payment` is the newest payment. The `prescription` block
+       (`medication_name`, `dosage_label`) needs `CLINICAL_READ`.
+
+117. **Staff subscriptions.**
+     - **Refill-due scope:** `REFILL_DUE` lists `ACTIVE` subscriptions whose
+       next billing is within 7 days (`[VERIFY IN FIGMA]`).
+     - **Price per month:** `price_per_month` comes from the package's
+       `display_price_per_month`. Legacy packages without it use the charge
+       divided by the interval.
+     - **Pause:** a staff pause has no resume date.
+     - **New refill:** this needs an `ACTIVE` subscription, an `ACTIVE`
+       treatment whose prescription has not expired, and refills remaining,
+       otherwise `409 no_refills_remaining`. It also needs a saved card,
+       otherwise `409 conflict`. It creates a `PENDING_PAYMENT` order, charges
+       the saved card (purpose `ORDER`), and lets the normal webhook flow
+       continue. The billing period does not change.
+
+118. **Refunds.** A new `Refund` model records each staff refund. Each refund
+     has its own provider idempotency key, so partial refunds work. The
+     refundable amount is `amount - refunded_amount` minus refunds still
+     pending. A non-admin refund above `refund_approval_limit` returns
+     `403 permission_denied` with `details.required = "ADMIN"`.
+
+     When `refund_fee_on_not_suitable` is on and a paid evaluation becomes
+     `NOT_SUITABLE`, an internal `BILLING` ticket is created as the refund
+     task. A completed refund webhook sets the `Refund` row to `SUCCEEDED`
+     (oldest pending first).
+
+119. **Programs (8.2).**
+     - **Name and descriptions:** `title` maps to `Program.name`.
+       `short_description` and `category` are new. `category` is checked
+       against `PROGRAM_CATEGORIES` (`[OPEN]`).
+     - **Products:** `product_ids` uses `Product.programs`.
+     - **Eligibility:** `eligibility` maps to `age_min`, `age_max` and
+       `min_bmi`, plus a new `max_bmi`. A BMI above `max_bmi` uses the same
+       screening effect as `min_bmi`.
+     - **Projection:** `projection` is stored as
+       `projection_loss_percent_by_month`. When it is set, the Part 2
+       projection uses it instead of the weekly kilogram rate.
+     - **Review hours:** `estimated_review_hours` is optional. A `null`
+       override falls back to the global `evaluation.estimated_review_hours`
+       setting.
+     - **Availability:** a program is available for new assessments when it is
+       active and its published questionnaire is active.
+
+120. **Packages (8.3).**
+     - **New fields:** `badge`, `billing_cadence`, `display_price_per_month`,
+       `charge_per_cycle` and `included_services`. Saving a package derives
+       `billing_type` and `billing_interval_months` from the cadence.
+     - **Checkout pricing:** checkout charges `charge_per_cycle` when it is
+       set. Legacy packages keep the sum of their items. Order line items from
+       admin packages carry a unit price of 0; the total comes from the
+       package.
+     - **Price check:** the `price_mismatch` check (new code, `400`) is
+       skipped for `ONE_TIME`.
+     - **Badges:** a second badge in the same program returns
+       `400 validation_error`.
+     - **Locked subscription prices:** a subscription stores its
+       `charge_per_cycle` at start, and renewals charge that stored price.
+       `SUBSCRIPTION_PRICE_LOCK` (default `true`, `[OPEN]`) controls this.
+
+121. **Questionnaires (8.4).** `QuestionnaireVersion` gains `title`,
+     `description`, `status`, `is_active`, `publish_note` and `created_by`.
+     `is_published` is kept in sync with `status = PUBLISHED`.
+     - **Create and draft:** create makes the program's next version as a
+       `DRAFT` with the fixed `measurements` step. It returns `409` if the
+       program already has a draft.
+     - **Question keys:** keys are generated (`q01`, `q02`, ...).
+     - **Updates:** updating options replaces the whole option list.
+     - **Reorder:** reorder must list every step and every question. The
+       `measurements` step cannot be deleted.
+     - **Validation rules:**
+       - every question step has at least one question;
+       - choice questions have 2 to 12 options, with at most one exclusive;
+       - `show_if` points to an earlier question;
+       - `TEXT` questions have a `max_length`.
+     - **Publish:** publish accepts an optional `note`. The questionnaire
+       `fee` is the program fee, or `null` when it is waived.
+
+122. **Evaluation fee (8.5)** is stored on the program's `fee_*` fields. B4
+     already held: the fee is copied at submit.
+
+123. **Products (8.1).**
+     - **Code:** `code` is generated from the name.
+     - **Starting doses:** `starting_dose_labels` maps to `starting_doses`,
+       stored as dose objects.
+     - **New field:** `lifestyle_essentials` is new on `Product`.
+     - **Images:** a product image comes from a confirmed `PRODUCT_IMAGE`
+       asset and is stored as `image_url`.
+
+124. **Content items and assets.** The new models `ContentItem` and
+     `AssetUpload` live in `catalog`. Confirmed assets are re-encoded like
+     avatars and stored under `public-assets/`. Their URL is
+     `PUBLIC_ASSET_BASE_URL + key` when that setting is configured, otherwise
+     the storage URL. `pricing.period` is stored as given.
+
+125. **Reference data.**
+     - **FAQs:** they gain `is_published`. Existing rows are marked published,
+       and the public FAQ list shows published rows only.
+     - **DELETE:** it removes an unreferenced row. A row in use is set to
+       `is_active = false` instead. FAQs and testimonials are always removed.
+     - **Support categories:** `TicketCategory` is new.
+     - **Consultation types:** they gain `description`, `is_initial` and
+       `is_active` where these were missing. `duration_minutes` must be a
+       multiple of 5.
+
+126. **Legal documents.** `LegalDocument` gains `status` (`DRAFT` or
+     `PUBLISHED`) and `effective_at`. Drafts have no version until they are
+     published. Publishing sets `version` to the Lima date, adding `-2`,
+     `-3`... when that date is already taken. It also sets `is_current`, and
+     consent checks then require the new version (Part 1, 2.4).
+
+127. **Runtime settings (9.5).** A new `PlatformSettings` singleton stores the
+     `evaluation`, `booking`, `complaints`, `support` and `payments` groups as
+     JSON, with defaults from Django settings. The `site`, `stats` and
+     `messaging` groups map onto the existing `SiteSettings` and
+     `PublicStats`. The runtime getters are used by:
+     - the claim timeout;
+     - the urgent threshold;
+     - the booking and join windows;
+     - the complaint SLA;
+     - ticket auto-close;
+     - the refund limit;
+     - the not-suitable refund rule;
+     - the global review-hours default.
+
+     `reapply_cooldown_days` is the default for new programs; the existing
+     per-program value stays in force. Each audit entry stores the old and new
+     values (settings are not clinical).
+
+128. **Reports (10).** Money uses `REPORTING_CURRENCY` (default `PEN`,
+     `[OPEN]`). Payments in other currencies, such as `USD` evaluation fees,
+     are excluded and noted in `definitions`. Results are cached for 5 minutes
+     per parameter set. Exports run as a Celery task that writes CSV to private
+     storage with a 10-minute pre-signed URL. Each export is audit-logged as
+     `EXPORT`.
+
+129. **Audit log (11.1).** `AuditLog` gains `action_type` (the contract
+     enum), `patient_id` and `changed_fields`. `record_audit` derives
+     `action_type` from the event name (`*.viewed`/`*.read` → `READ`, and so
+     on), and a migration backfills the existing rows. The API `action` field
+     is `action_type`. Successful logins are now recorded as `LOGIN`.
+     List reads by staff are not audited, only detail reads and writes, to
+     keep the log useful.
+
+130. **Privacy requests (11.2).** A new `PrivacyRequest` model, with
+     `due_at = created_at + PRIVACY_RESPONSE_DAYS` (default 20,
+     `[LEGAL REVIEW]`).
+     - **Patient response:** each item has `id`, `type`, `status`, `details`,
+       `response_note`, `due_at`, `download_url`, `download_expires_at`,
+       `created_at` and `updated_at`. The contract left this shape open.
+     - **Access export:** fulfilling it writes a JSON export to storage. A
+       7-day link is emailed, and the patient also sees it in the list.
+     - **Deletion:** fulfilling it anonymises the account (name, email, phone,
+       addresses, password, MFA). It keeps payments, orders, prescriptions,
+       treatments, complaints and the audit trail, and lists them in
+       `response_note`.
+     - **Notification:** patients are told through the new
+       `PRIVACY_REQUEST_UPDATED` notification type.
+
+131. **New error codes.** `assigned_to_other` (409), `physician_not_eligible`
+     (409), `price_mismatch` (400).
+
+132. **Amendments.** B6 adds the new package fields to Part 3, 6.1. B9 pads
+     order numbers to five digits (`ADL-ORD-00042`). B3 adds `SUBMITTED →
+     PENDING_LABS` to the evaluation state machine.
+
+133. **Schema.** Request bodies are typed serializers. Composite read models
+     (dashboards, reports, patient detail) are documented as JSON objects to
+     keep the schema maintainable.
+
+134. **Figma review (Part 5, section 13).** Recorded in
+     `docs/figma-screens-part5.md`; no API impact.
+
+## Full-backend audit (2026-11-12)
+
+135. **Refund approval limit across currencies (Part 5, 7.3).** The limit is a
+     single `Money` value, so it cannot be compared with a refund in another
+     currency. Staff refunds in any currency other than the limit's (for
+     example `USD` evaluation fees when the limit is in `PEN`) now need an
+     admin: `403 permission_denied` with `details.required: "ADMIN"`. Before
+     this fix, such refunds skipped the limit entirely.
+
+136. **Historical MRR (Part 5, 10.1).** `monthly_recurring_revenue` counts
+     subscriptions created before the period end that are still `ACTIVE`, or
+     were cancelled after the period end. Pauses are not historised, so a
+     subscription paused today is also left out of past periods.
+
+137. **Staff access to assessments (Parts 2 and 5).** Part 2 let every staff
+     user read any assessment. Part 5 makes `CLINICAL_READ` the gate for
+     health information, so `GET /assessments/`, `GET /assessments/{id}/` and
+     `GET /assessments/{id}/evaluation/` now return nothing (`404`, or an empty
+     list) to staff without it. `GET /assessments/{id}/fee/` stays open to
+     staff because it is payment data.
+
+138. **Account lifecycle hardening.**
+     - Google sign-in and `POST /auth/mfa/verify/` return
+       `403 account_disabled` for suspended or anonymised accounts, as
+       password login already did.
+     - Fulfilling a `DELETION` privacy request also cancels open subscriptions
+       at once, removes saved cards, and deletes the allauth email and Google
+       identity rows.
+     - New programs take `evaluation.reapply_cooldown_days` as their cooldown
+       (as stated in 127).
+     - `support.first_response_sla_minutes` is stored and editable, but no
+       contract field uses it yet (`[OPEN]`: SLA indicator for tickets).

@@ -56,6 +56,7 @@ def care_patients(physician: User) -> QuerySet[User]:
             Q(assessments__evaluation__physician=physician)
             | Q(treatments__prescribing_physician=physician)
             | Q(consultations__physician=physician)
+            | Q(patient_profile__assigned_physician=physician)
         )
         .distinct()
     )
@@ -66,9 +67,12 @@ def has_care_relationship(physician: User, patient_id: Any) -> bool:
 
 
 def is_treating(physician: User, patient: User) -> bool:
+    from apps.patients.models import PatientProfile
+
     return (
         Treatment.objects.filter(patient=patient, prescribing_physician=physician).exists()
         or Evaluation.objects.filter(assessment__user=patient, physician=physician).exists()
+        or PatientProfile.objects.filter(user=patient, assigned_physician=physician).exists()
     )
 
 

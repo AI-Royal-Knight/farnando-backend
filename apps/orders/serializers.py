@@ -35,6 +35,9 @@ class PackageSerializer(serializers.ModelSerializer[Package]):
     billing_type = serializers.ChoiceField(choices=BillingType.choices)
     price = serializers.SerializerMethodField()
     items = serializers.SerializerMethodField()
+    badge = serializers.SerializerMethodField()
+    display_price_per_month = serializers.SerializerMethodField()
+    included_services = serializers.ListField(child=serializers.CharField())
 
     class Meta:
         model = Package
@@ -42,16 +45,25 @@ class PackageSerializer(serializers.ModelSerializer[Package]):
             "id",
             "name",
             "description",
+            "badge",
             "supply_duration_weeks",
             "billing_type",
             "billing_interval_months",
             "price",
+            "display_price_per_month",
+            "included_services",
             "items",
         ]
         read_only_fields = fields
 
     def get_price(self, obj: Package) -> dict[str, str]:
         return money(obj.price, obj.currency)
+
+    def get_badge(self, obj: Package) -> str | None:
+        return obj.badge or None
+
+    def get_display_price_per_month(self, obj: Package) -> dict[str, str]:
+        return money(obj.monthly_price, obj.currency)
 
     def get_items(self, obj: Package) -> list[dict[str, Any]]:
         return [

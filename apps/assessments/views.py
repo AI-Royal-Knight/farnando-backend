@@ -339,7 +339,7 @@ class AssessmentFeeView(APIView):
     )
     def get(self, request: Request, assessment_id: str) -> Response:
         assessment = selectors.get_assessment_for_read(
-            user=request.user, assessment_id=assessment_id
+            user=request.user, assessment_id=assessment_id, clinical=False
         )
         _audit_non_owner_read(request, assessment, "evaluation.fee_read")
         evaluation = _evaluation_for(assessment)

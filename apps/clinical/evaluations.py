@@ -17,6 +17,7 @@ from rest_framework.exceptions import NotFound, ValidationError
 from apps.accounts.models import User
 from apps.assessments.enums import (
     EvaluationStatus,
+    FeeStatus,
     LabsStatus,
     LabUploadStatus,
     QuestionType,
@@ -39,12 +40,14 @@ from apps.assessments.services import (
     display_weight,
     lab_recommendations,
 )
+from apps.catalog import runtime
 from apps.clinical.models import PrescriptionDocument, UploadStatus
 from apps.consultations.clinicians import physician_summary
 from apps.consultations.models import ClinicianProfile, PhysicianVerificationStatus
 from apps.core.audit import record_audit
 from apps.core.exceptions import (
     AlreadyClaimed,
+    AssignedToOther,
     ClaimRequired,
     DoseOutOfRange,
     FlagsNotAcknowledged,
@@ -143,9 +146,17 @@ def _base() -> QuerySet[Evaluation]:
     )
 
 
+def visible_to(user: User, profile: ClinicianProfile) -> Q:
+    """Amendment B5: reserved for the caller, or unreserved in an allowed program."""
+
+    return Q(assigned_physician=user) | (
+        Q(assigned_physician__isnull=True) & program_filter(profile)
+    )
+
+
 def queue_for(user: User, profile: ClinicianProfile) -> QuerySet[Evaluation]:
     return _base().filter(
-        program_filter(profile), status=EvaluationStatus.SUBMITTED, physician__isnull=True
+        visible_to(user, profile), status=EvaluationStatus.SUBMITTED, physician__isnull=True
     )
 
 
@@ -216,6 +227,8 @@ def item_payload(evaluation: Evaluation) -> dict[str, Any]:
 
 
 def eligible_physicians(evaluation: Evaluation) -> QuerySet[User]:
+    if evaluation.assigned_physician_id is not None:
+        return User.objects.filter(pk=evaluation.assigned_physician_id, is_active=True)
     program = evaluation.assessment.program
     profiles = ClinicianProfile.objects.filter(
         verification_status=PhysicianVerificationStatus.VERIFIED,
@@ -267,12 +280,14 @@ def claim(*, evaluation_id: Any, user: User, profile: ClinicianProfile, request:
     with transaction.atomic():
         evaluation = _locked(evaluation_id)
         visible = Evaluation.objects.filter(pk=evaluation.pk).filter(
-            Q(physician=user) | program_filter(profile)
+            Q(physician=user) | visible_to(user, profile) | ~Q(assigned_physician=None)
         )
         if not visible.exists():
             raise NotFound()
         if evaluation.physician_id not in (None, user.pk):
             raise AlreadyClaimed()
+        if evaluation.assigned_physician_id not in (None, user.pk):
+            raise AssignedToOther()
         if evaluation.physician_id == user.pk and evaluation.status in (
             EvaluationStatus.IN_REVIEW,
             EvaluationStatus.PENDING_LABS,
@@ -327,15 +342,17 @@ def release(
 
 
 def _release(evaluation: Evaluation, *, actor: User | None, reason: str) -> None:
+    if evaluation.assigned_physician_id == evaluation.physician_id:
+        evaluation.assigned_physician = None
     evaluation.physician = None
     evaluation.claimed_at = None
-    evaluation.save(update_fields=["physician", "claimed_at", "updated_at"])
+    evaluation.save(update_fields=["physician", "assigned_physician", "claimed_at", "updated_at"])
     EvaluationService.transition(evaluation, EvaluationStatus.SUBMITTED, actor=actor, reason=reason)
 
 
 def auto_release_stale_claims(now: Any = None) -> int:
     now = now or timezone.now()
-    cutoff = now - timedelta(hours=settings.EVALUATION_CLAIM_TIMEOUT_HOURS)
+    cutoff = now - timedelta(hours=runtime.hours("evaluation", "claim_timeout_hours"))
     count = 0
     stale = Evaluation.objects.filter(status=EvaluationStatus.IN_REVIEW).filter(
         Q(last_activity_at__lt=cutoff) | Q(last_activity_at__isnull=True, claimed_at__lt=cutoff)
@@ -456,6 +473,25 @@ def lab_attachments(assessment_ids: list[Any]) -> list[dict[str, Any]]:
     ]
 
 
+def questionnaire_blocks(evaluation: Evaluation) -> list[dict[str, Any]]:
+    groups: dict[str, list[dict[str, str]]] = {group: [] for group in [*GROUP_ORDER, "OTHER"]}
+    for answer in _answers(evaluation):
+        rendered = _render_answer(answer)
+        if not rendered:
+            continue
+        group = answer.question.review_group or ReviewGroup.OTHER
+        groups.setdefault(group, []).append(
+            {"question_text": answer.question.text, "answer": rendered}
+        )
+    blocks: list[dict[str, Any]] = [
+        {"group": group, "title": ReviewGroup(group).label, "items": groups[group]}
+        for group in GROUP_ORDER
+    ]
+    if groups["OTHER"]:
+        blocks.append({"group": "OTHER", "title": "Other", "items": groups["OTHER"]})
+    return blocks
+
+
 def packet(*, evaluation_id: Any, user: User, request: Any) -> dict[str, Any]:
     evaluation = _base().filter(pk=evaluation_id).first()
     if evaluation is None:
@@ -476,21 +512,7 @@ def packet(*, evaluation_id: Any, user: User, request: Any) -> dict[str, Any]:
     profile = ClinicianProfile.objects.filter(user=user).first()
     unit = profile.preferred_weight_unit if profile else "KG"
 
-    groups: dict[str, list[dict[str, str]]] = {group: [] for group in [*GROUP_ORDER, "OTHER"]}
-    for answer in _answers(evaluation):
-        rendered = _render_answer(answer)
-        if not rendered:
-            continue
-        group = answer.question.review_group or ReviewGroup.OTHER
-        groups.setdefault(group, []).append(
-            {"question_text": answer.question.text, "answer": rendered}
-        )
-    blocks = [
-        {"group": group, "title": ReviewGroup(group).label, "items": groups[group]}
-        for group in GROUP_ORDER
-    ]
-    if groups["OTHER"]:
-        blocks.append({"group": "OTHER", "title": "Other", "items": groups["OTHER"]})
+    blocks = questionnaire_blocks(evaluation)
 
     panels = lab_recommendations(evaluation)["panels"]
     previous = (
@@ -546,6 +568,14 @@ def packet(*, evaluation_id: Any, user: User, request: Any) -> dict[str, Any]:
 
 
 def lab_panel_catalog() -> list[dict[str, str]]:
+    from apps.catalog.models import LabPanel
+
+    panels = list(LabPanel.objects.filter(is_active=True).order_by("position", "code"))
+    if panels:
+        return [
+            {"code": panel.code, "name": panel.name, "description": panel.description}
+            for panel in panels
+        ]
     seen: dict[str, dict[str, str]] = {}
     for program in Program.objects.filter(is_active=True).order_by("position", "name"):
         panels = program.lab_panels if isinstance(program.lab_panels, list) else []
@@ -630,7 +660,25 @@ def reject(
         from apps.clinical.tasks import send_staff_alert
 
         transaction.on_commit(lambda: send_staff_alert.delay("evaluation_rejected"))
+        _refund_task_if_configured(evaluation)
     return evaluation
+
+
+def _refund_task_if_configured(evaluation: Evaluation) -> None:
+    """Part 5, 7.3: optional refund task for a paid fee on NOT_SUITABLE."""
+
+    from apps.catalog import runtime
+
+    if not runtime.value("payments", "refund_fee_on_not_suitable"):
+        return
+    fee = getattr(evaluation, "fee", None)
+    if fee is None or fee.status != FeeStatus.PAID:
+        return
+    from apps.support.tickets import create_refund_task
+
+    create_refund_task(
+        title="Evaluation fee refund (not suitable)", patient=evaluation.assessment.user
+    )
 
 
 def _dose_key(value: Any, unit: Any) -> tuple[Decimal, str]:

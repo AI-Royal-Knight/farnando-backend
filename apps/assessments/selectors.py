@@ -11,7 +11,17 @@ from apps.accounts.enums import Role
 from apps.assessments.models import Assessment, LabUpload
 
 
-def assessments_visible_to(user: Any) -> QuerySet[Assessment]:
+def assessments_visible_to(user: Any, *, clinical: bool = True) -> QuerySet[Assessment]:
+    """Assessments ``user`` may read.
+
+    Staff need ``CLINICAL_READ`` (Part 5, section 1): assessments, answers and
+    evaluation results are health information. ``clinical=False`` is for
+    administrative reads (the evaluation fee), which Part 2 opens to staff.
+    """
+
+    from apps.staff.models import Permission
+    from apps.staff.permissions import has_perm
+
     queryset = Assessment.objects.select_related(
         "program", "questionnaire_version", "measurement", "evaluation"
     ).prefetch_related("answers__question")
@@ -22,13 +32,15 @@ def assessments_visible_to(user: Any) -> QuerySet[Assessment]:
             Q(evaluation__physician=user)
             | Q(evaluation__status="SUBMITTED", evaluation__physician__isnull=True)
         ).distinct()
-    if user.role in (Role.STAFF, Role.ADMIN):
+    if user.role == Role.ADMIN:
+        return queryset
+    if user.role == Role.STAFF and (not clinical or has_perm(user, Permission.CLINICAL_READ)):
         return queryset
     return queryset.none()
 
 
-def get_assessment_for_read(*, user: Any, assessment_id: Any) -> Assessment:
-    assessment = assessments_visible_to(user).filter(pk=assessment_id).first()
+def get_assessment_for_read(*, user: Any, assessment_id: Any, clinical: bool = True) -> Assessment:
+    assessment = assessments_visible_to(user, clinical=clinical).filter(pk=assessment_id).first()
     if assessment is None:
         raise NotFound()
     return assessment

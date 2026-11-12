@@ -67,7 +67,23 @@ class AuditLog(models.Model):
         blank=True,
         related_name="audit_entries",
     )
+
+    class ActionType(models.TextChoices):
+        READ = "READ", "Read"
+        CREATE = "CREATE", "Create"
+        UPDATE = "UPDATE", "Update"
+        DELETE = "DELETE", "Delete"
+        LOGIN = "LOGIN", "Login"
+        DOWNLOAD = "DOWNLOAD", "Download"
+        EXPORT = "EXPORT", "Export"
+        PERMISSION_CHANGE = "PERMISSION_CHANGE", "Permission change"
+
     action = models.CharField(max_length=80, db_index=True)
+    action_type = models.CharField(
+        max_length=20, choices=ActionType.choices, default=ActionType.UPDATE, db_index=True
+    )
+    patient_id = models.UUIDField(null=True, blank=True, db_index=True)
+    changed_fields = models.JSONField(default=list)
     object_type = models.CharField(max_length=80)
     object_id = models.CharField(max_length=64, db_index=True)
     request_id = models.CharField(max_length=100, blank=True, default="")

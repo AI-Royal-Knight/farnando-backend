@@ -17,6 +17,7 @@ from apps.accounts.models import User
 from apps.accounts.services import ConsentService
 from apps.assessments.enums import EvaluationStatus
 from apps.assessments.models import Assessment, Evaluation
+from apps.catalog import runtime
 from apps.consultations.availability import find_slot, physician_timezone
 from apps.consultations.clinicians import profile_for
 from apps.consultations.models import (
@@ -96,11 +97,15 @@ def has_consultation_eligibility(user: User) -> bool:
 
 
 def join_opens_at(consultation: Consultation) -> datetime:
-    return consultation.start - timedelta(minutes=settings.CONSULTATION_JOIN_EARLY_MINUTES)
+    return consultation.start - timedelta(
+        minutes=runtime.hours("booking", "join_window_before_minutes")
+    )
 
 
 def join_closes_at(consultation: Consultation) -> datetime:
-    return consultation.end + timedelta(minutes=settings.CONSULTATION_JOIN_GRACE_MINUTES)
+    return consultation.end + timedelta(
+        minutes=runtime.hours("booking", "join_window_after_minutes")
+    )
 
 
 def can_join(consultation: Consultation, now: datetime | None = None) -> bool:
@@ -120,7 +125,7 @@ def _changeable(consultation: Consultation, hours: int, now: datetime | None = N
 
 
 def can_reschedule(consultation: Consultation, now: datetime | None = None) -> bool:
-    return _changeable(consultation, settings.CONSULTATION_RESCHEDULE_MIN_HOURS, now)
+    return _changeable(consultation, runtime.hours("booking", "reschedule_min_hours_before"), now)
 
 
 def can_cancel(consultation: Consultation, now: datetime | None = None) -> bool:
@@ -130,7 +135,7 @@ def can_cancel(consultation: Consultation, now: datetime | None = None) -> bool:
             consultation.status in (ConsultationStatus.REQUESTED, ConsultationStatus.CONFIRMED)
             and now < consultation.start
         )
-    return _changeable(consultation, settings.CONSULTATION_CANCEL_MIN_HOURS, now)
+    return _changeable(consultation, runtime.hours("booking", "cancel_min_hours_before"), now)
 
 
 def transition(
@@ -447,7 +452,7 @@ def expire_requests(now: datetime | None = None) -> int:
 
 def mark_no_shows(now: datetime | None = None) -> int:
     now = now or timezone.now()
-    grace = timedelta(minutes=settings.CONSULTATION_JOIN_GRACE_MINUTES)
+    grace = timedelta(minutes=runtime.hours("booking", "join_window_after_minutes"))
     count = 0
     for consultation in Consultation.objects.filter(
         status=ConsultationStatus.CONFIRMED, started_at__isnull=True, end__lte=now - grace

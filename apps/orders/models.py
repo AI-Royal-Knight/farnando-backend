@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
+from typing import Any
 
 from django.conf import settings
 from django.db import models
@@ -43,6 +44,21 @@ class BillingType(models.TextChoices):
     RECURRING = "RECURRING", "Recurring"
 
 
+class BillingCadence(models.TextChoices):
+    MONTHLY = "MONTHLY", "Monthly"
+    QUARTERLY = "QUARTERLY", "Quarterly"
+    BIANNUAL = "BIANNUAL", "Biannual"
+    ONE_TIME = "ONE_TIME", "One time"
+
+
+CADENCE_MONTHS = {
+    BillingCadence.MONTHLY: 1,
+    BillingCadence.QUARTERLY: 3,
+    BillingCadence.BIANNUAL: 6,
+    BillingCadence.ONE_TIME: 0,
+}
+
+
 class BillingDocumentType(models.TextChoices):
     BOLETA = "BOLETA", "Boleta"
     FACTURA = "FACTURA", "Factura"
@@ -75,6 +91,16 @@ class Package(BaseModel):
     currency = models.CharField(max_length=3, default="PEN")
     is_active = models.BooleanField(default=True, db_index=True)
     position = models.PositiveIntegerField(default=0)
+    # Part 5, 8.3 (B6).
+    badge = models.CharField(max_length=30, blank=True, default="")
+    billing_cadence = models.CharField(
+        max_length=12, choices=BillingCadence.choices, blank=True, default=""
+    )
+    display_price_per_month = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    charge_per_cycle = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    included_services = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ["position", "name"]
@@ -82,12 +108,32 @@ class Package(BaseModel):
     def __str__(self) -> str:
         return self.name
 
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if self.billing_cadence:
+            months = CADENCE_MONTHS[BillingCadence(self.billing_cadence)]
+            if months:
+                self.billing_type = BillingType.RECURRING
+                self.billing_interval_months = months
+            else:
+                self.billing_type = BillingType.ONE_TIME
+                self.billing_interval_months = None
+        super().save(*args, **kwargs)
+
     @property
     def price(self) -> Decimal:
+        if self.charge_per_cycle is not None:
+            return self.charge_per_cycle
         return sum(
             (item.unit_price * item.quantity for item in self.items.all()),
             Decimal("0.00"),
         )
+
+    @property
+    def monthly_price(self) -> Decimal:
+        if self.display_price_per_month is not None:
+            return self.display_price_per_month
+        months = self.billing_interval_months or 1
+        return (self.price / months).quantize(Decimal("0.01"))
 
 
 class PackageItem(BaseModel):
@@ -156,6 +202,8 @@ class Subscription(BaseModel):
     staff_review_reason = models.CharField(max_length=200, blank=True, default="")
     renewal_failures = models.PositiveSmallIntegerField(default=0)
     next_retry_at = models.DateTimeField(null=True, blank=True)
+    # Part 5, 8.3: price kept at start; renewals charge it (SUBSCRIPTION_PRICE_LOCK).
+    charge_per_cycle = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -270,3 +318,19 @@ class OrderStatusHistory(models.Model):
 
     def __str__(self) -> str:
         return f"{self.order_id}:{self.from_status}->{self.to_status}"
+
+
+class OrderNote(BaseModel):
+    """Internal, append-only staff note (Part 5, 7.1)."""
+
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="internal_notes")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    body = EncryptedTextField()
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"note:{self.order_id}"

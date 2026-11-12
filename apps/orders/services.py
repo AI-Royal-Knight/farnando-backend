@@ -96,7 +96,11 @@ ORDER_TRANSITIONS: dict[str, set[str]] = {
         OrderStatus.CANCELLED,
         OrderStatus.REFUNDED,
     },
-    OrderStatus.COMPOUNDING: {OrderStatus.IN_TRANSIT, OrderStatus.REFUNDED},
+    OrderStatus.COMPOUNDING: {
+        OrderStatus.IN_TRANSIT,
+        OrderStatus.CANCELLED,
+        OrderStatus.REFUNDED,
+    },
     OrderStatus.IN_TRANSIT: {OrderStatus.OUT_FOR_DELIVERY, OrderStatus.REFUNDED},
     OrderStatus.OUT_FOR_DELIVERY: {OrderStatus.DELIVERED, OrderStatus.REFUNDED},
     OrderStatus.DELIVERED: {OrderStatus.REFUNDED},
@@ -138,8 +142,8 @@ class Pricing:
     currency: str
 
 
-def price_package(package: Package) -> Pricing:
-    subtotal = _q(package.price)
+def price_package(package: Package, *, locked_price: Decimal | None = None) -> Pricing:
+    subtotal = _q(locked_price if locked_price is not None else package.price)
     shipping = _q(Decimal(str(settings.ORDER_SHIPPING_FEE)))
     tax = _q((subtotal + shipping) * Decimal(str(settings.ORDER_TAX_RATE)))
     return Pricing(
@@ -254,7 +258,7 @@ def _next_number() -> str:
     locked = OrderSequence.objects.select_for_update().get(pk=sequence.pk)
     locked.last_number += 1
     locked.save(update_fields=["last_number"])
-    return f"{settings.ORDER_NUMBER_PREFIX}{locked.last_number:04d}"
+    return f"{settings.ORDER_NUMBER_PREFIX}{locked.last_number:05d}"
 
 
 def _snapshot(address: Address) -> dict[str, Any]:
@@ -568,6 +572,7 @@ def _start_subscription(order: Order) -> Subscription:
         next_shipment_at=end,
         payment_method=order.payment_method,
         shipping_address=order.shipping_address,
+        charge_per_cycle=_q(package.price),
     )
     order.subscription = subscription
     order.save(update_fields=["subscription", "updated_at"])
@@ -641,8 +646,13 @@ def _audit_subscription(request: Any, subscription: Subscription, action: str) -
     )
 
 
+def subscription_pricing(subscription: Subscription) -> Pricing:
+    locked = subscription.charge_per_cycle if settings.SUBSCRIPTION_PRICE_LOCK else None
+    return price_package(subscription.package, locked_price=locked)
+
+
 def charge_renewal(subscription: Subscription, *, now: datetime | None = None) -> Payment | None:
-    pricing = price_package(subscription.package)
+    pricing = subscription_pricing(subscription)
     method = subscription.payment_method
     period_key = subscription.current_period_end.isoformat()
     key = str(
@@ -708,7 +718,7 @@ def on_renewal_succeeded(payment: Payment) -> None:
         .get(pk=payment.subscription_id)
     )
     package = subscription.package
-    pricing = price_package(package)
+    pricing = subscription_pricing(subscription)
     now = timezone.now()
     address = subscription.shipping_address
     order = Order.objects.create(

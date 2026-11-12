@@ -16,6 +16,7 @@ from rest_framework.exceptions import NotFound, ValidationError
 from apps.accounts.models import User
 from apps.assessments.enums import EvaluationStatus
 from apps.assessments.models import Evaluation
+from apps.catalog import runtime
 from apps.clinical.evaluations import mine_for, patient_brief, queue_for
 from apps.clinical.models import ClinicalNote, NoteKind
 from apps.consultations import services as consultation_services
@@ -396,7 +397,7 @@ def complete(
 def mark_no_show(*, physician: User, consultation_id: Any, note: str, request: Any) -> Consultation:
     with transaction.atomic():
         consultation = get_own(physician, consultation_id, lock=True)
-        grace = timedelta(minutes=settings.CONSULTATION_JOIN_GRACE_MINUTES)
+        grace = timedelta(minutes=runtime.hours("booking", "join_window_after_minutes"))
         if consultation.status != ConsultationStatus.CONFIRMED or timezone.now() < (
             consultation.start + grace
         ):

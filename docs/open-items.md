@@ -215,6 +215,44 @@ Every value below is configuration. See `docs/contract-deviations.md` items 75�
 - `TODO(part-4-deploy)`: a real Daily adapter (owner tokens, end room) and a
   signing provider for prescriptions.
 
+## API Contract Part 5 open decisions
+
+Every value below is configuration. See `docs/contract-deviations.md` items 99–138.
+
+- `[OPEN]` (13.4.1): permission bundles per staff type (`apps/staff/models.py`
+  `DEFAULT_BUNDLES`; admins override per account), the bundle given to existing
+  staff (nurse or support agent), the refund approval limit
+  (`payments.refund_approval_limit` setting), ticket auto-close
+  (`support.auto_close_resolved_days`, 7), the urgent threshold
+  (`evaluation.urgent_after_hours`, 24), and physician reservation per program.
+- `[OPEN]` (13.4.2): reporting currency (`REPORTING_CURRENCY`, `PEN`), package
+  durations (`PACKAGE_SUPPLY_WEEKS`, 4/12/24), carriers and cold-chain rules (free
+  text today), and whether price changes reach subscribers
+  (`SUBSCRIPTION_PRICE_LOCK`, true).
+- `[OPEN]` (13.4.5): who may suspend patients (only `PATIENTS_MANAGE`, in no
+  default bundle) and whether a suspended physician's patients are reassigned
+  automatically (only open evaluations are reassigned today).
+- `[OPEN]`: staff invitation expiry (`STAFF_INVITATION_TTL_DAYS`, 7), program
+  categories (`PROGRAM_CATEGORIES`), the recommendation score weights, the
+  `REFILL_DUE` window (7 days), `phase_label` in the patient plan (always null),
+  and whether suspended patients' subscriptions resume on reactivation (no).
+- `[OPEN]`: the evaluation fee shown in Figma ($49 admin vs $25 patient); the
+  value is per program and admin-edited.
+- `[MEDICAL REVIEW]` (13.4.3): screening effects and eligibility ranges, dose
+  guardrails and safety texts, which ticket categories need clinical staff
+  (`requires_clinical_staff`, seeded true for `MEDICATION_GUIDANCE`), and the
+  messaging safety notice (`messaging` settings group).
+- `[LEGAL REVIEW]` (13.4.4): Complaints Book format, deadlines and retention;
+  refund and money-back terms (`refund_fee_on_not_suitable`, false); privacy
+  request deadlines (`PRIVACY_RESPONSE_DAYS`, 20) and the retained-record list;
+  registry checks for physician licenses (`checked_registry` must be true);
+  marketing statistics evidence; testimonial consent; every legal document
+  publish; audit-log retention; health information in replies to contact-form
+  requesters (replies are sent as written by staff).
+- `[VERIFY IN FIGMA]`: dashboard stat labels, physician card stats, the
+  "New Refill" tab, the staff Messages screen (served by the ticket endpoints),
+  the admin Overview, the audit-log and export screens.
+
 ## Legal and clinical review
 
 - `LEGAL_REVIEW`: approve the Terms, Privacy Policy and sensitive-health-data
@@ -349,3 +387,7 @@ Still open in Phase 2 / Part 3:
 - API clients treat UUIDs as opaque.
 - The SPA is a separate origin and uses bearer JWTs (ADR-0002).
 - The docs UI is an internal staff tool, not a public developer portal.
+- `[OPEN]` (audit, deviations 135–138): how a ticket SLA indicator should use
+  `support.first_response_sla_minutes` (stored, not yet exposed); whether
+  staff may refund in a currency other than the approval limit's (admin only
+  today); and whether pauses should be historised for past-period MRR.
