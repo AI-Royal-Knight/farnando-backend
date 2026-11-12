@@ -1,4 +1,4 @@
-.PHONY: up down logs test coverage lint format typecheck check migrate makemigrations seed schema shell docker-build docker-check
+.PHONY: up down logs test coverage lint format typecheck check migrate makemigrations seed schema postman shell docker-build docker-check
 
 up:
 	docker compose up --build -d
@@ -40,6 +40,9 @@ seed:
 
 schema:
 	uv run python manage.py spectacular --file openapi.yaml --validate --fail-on-warn
+
+postman: schema
+	uv run python scripts/build_postman.py openapi.yaml postman.json
 
 shell:
 	uv run python manage.py shell
