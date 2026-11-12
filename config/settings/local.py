@@ -6,7 +6,19 @@ from .base import *
 
 DEBUG = env.bool("DJANGO_DEBUG", default=True)
 ENVIRONMENT = "local"
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0", "testserver"]
+# Local hosts always work; DJANGO_ALLOWED_HOSTS adds more (e.g. a server IP
+# when the compose stack runs on a remote machine).
+ALLOWED_HOSTS = list(
+    dict.fromkeys(
+        [
+            "localhost",
+            "127.0.0.1",
+            "0.0.0.0",
+            "testserver",
+            *env.list("DJANGO_ALLOWED_HOSTS", default=[]),
+        ]
+    )
+)
 ENABLE_API_DOCS = True
 
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
