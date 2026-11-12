@@ -20,6 +20,9 @@ ALLOWED_HOSTS = list(
     )
 )
 ENABLE_API_DOCS = True
+# The compose stack runs these settings with DEBUG=False; keep Swagger/ReDoc
+# open there anyway. Set API_DOCS_PUBLIC=False to require a staff login.
+API_DOCS_PUBLIC = env.bool("API_DOCS_PUBLIC", default=True)
 
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
 CORS_ALLOWED_ORIGINS = env.list(

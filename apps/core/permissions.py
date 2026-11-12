@@ -88,7 +88,7 @@ class CanAccessApiDocs(BasePermission):
     """Local development is open; production requires staff/admin."""
 
     def has_permission(self, request: Any, view: Any) -> bool:
-        if settings.DEBUG:
+        if settings.DEBUG or settings.API_DOCS_PUBLIC:
             return True
         user = request.user
         return bool(

@@ -505,6 +505,8 @@ SPECTACULAR_SETTINGS = {
 }
 
 ENABLE_API_DOCS = env.bool("ENABLE_API_DOCS", default=False)
+# When true, the docs need no login even with DEBUG off (local/compose only).
+API_DOCS_PUBLIC = False
 
 # ---------------------------------------------------------------------------
 # Static and media files

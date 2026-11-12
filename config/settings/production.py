@@ -52,6 +52,7 @@ if not CSRF_TRUSTED_ORIGINS:
     raise ImproperlyConfigured("CSRF_TRUSTED_ORIGINS must list the production frontend origins.")
 
 ENABLE_API_DOCS = env.bool("ENABLE_API_DOCS", default=False)
+API_DOCS_PUBLIC = False  # production docs always require staff/admin
 CAPTCHA_REQUIRED = env.bool("CAPTCHA_REQUIRED", default=True)
 if CAPTCHA_REQUIRED:
     _require("CAPTCHA_SECRET_KEY")

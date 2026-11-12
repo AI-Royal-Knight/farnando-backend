@@ -63,6 +63,14 @@ def test_docs_are_staff_only_in_non_debug(staff_user: User, patient_user: User) 
     assert staff.get("/api/schema/").status_code == 200
 
 
+def test_docs_open_without_login_when_public() -> None:
+    with override_settings(API_DOCS_PUBLIC=True):
+        anonymous = Client()
+        assert anonymous.get("/api/docs/").status_code == 200
+        assert anonymous.get("/api/redoc/").status_code == 200
+        assert anonymous.get("/api/schema/").status_code == 200
+
+
 def test_docs_return_404_when_disabled(staff_user: User) -> None:
     client = Client()
     client.force_login(staff_user)
