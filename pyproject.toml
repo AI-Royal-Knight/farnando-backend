@@ -48,7 +48,7 @@ dev = [
   "ruff==0.17.4",
   "mypy==1.19.1",
   "django-stubs[compatible-mypy]==5.2.9",
-  "djangorestframework-stubs[compatible-mypy]==3.16.9",
+  "djangorestframework-stubs[compatible-mypy]==3.18.2",
   "bandit==1.9.4",
   "pip-audit==2.10.1",
   "pre-commit==4.7.0",
