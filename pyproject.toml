@@ -46,7 +46,7 @@ dev = [
   "pytest-cov==7.1.0",
   "factory-boy==3.3.3",
   "ruff==0.17.4",
-  "mypy==1.19.1",
+  "mypy==2.4.1",
   "django-stubs[compatible-mypy]==5.2.9",
   "djangorestframework-stubs[compatible-mypy]==3.16.9",
   "bandit==1.9.4",
