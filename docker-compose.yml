@@ -5,7 +5,7 @@ x-app-environment: &app-environment
   DJANGO_DEBUG: "False"
   DJANGO_ENVIRONMENT: compose
   DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-compose-only-secret-change-me}
-  DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,web
+  DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,web}
   DATABASE_URL: postgres://adelgaceya:${POSTGRES_PASSWORD:-adelgaceya}@postgres:5432/adelgaceya
   REDIS_URL: redis://redis:6379/0
   CELERY_BROKER_URL: redis://redis:6379/1
@@ -14,10 +14,10 @@ x-app-environment: &app-environment
   EMAIL_HOST: mailpit
   EMAIL_PORT: "1025"
   DEFAULT_FROM_EMAIL: Adelgaceya <no-reply@adelgaceya.local>
-  FRONTEND_URL: http://localhost:3000
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
   ENABLE_API_DOCS: "True"
-  CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
-  CSRF_TRUSTED_ORIGINS: http://localhost:8000,http://localhost:3000
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+  CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:${WEB_PORT:-8000},http://localhost:3000}
   FIELD_ENCRYPTION_KEYS: ${FIELD_ENCRYPTION_KEYS:-tW8uBgbY93Ih64CaqRsEIDheNMVimjTE97KQKAyVAxA=}
   AWS_STORAGE_BUCKET_NAME: adelgaceya-media
   AWS_S3_ENDPOINT_URL: http://minio:9000
@@ -51,7 +51,8 @@ services:
       <<: *app-environment
       RUN_MIGRATIONS: "1"
     ports:
-      - "8000:8000"
+      # Host port is configurable: set WEB_PORT in .env if 8000 is taken.
+      - "${WEB_PORT:-8000}:8000"
     healthcheck:
       test:
         [
@@ -119,14 +120,14 @@ services:
     volumes:
       - minio-data:/bitnami/minio/data
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
 
   mailpit:
     image: axllent/mailpit:v1.33.1
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
 
 volumes:
   postgres-data:

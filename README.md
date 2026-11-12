@@ -55,6 +55,21 @@ Demo accounts created by `seed_demo` (password `Adelgaceya2026!`):
 
 > The demo password is public. Never run `seed_demo` against production.
 
+**Port already in use?** If `docker compose up` fails with
+`failed to bind host port ... address already in use`, another process owns
+that host port. Either stop it (`sudo ss -ltnp 'sport = :8000'` shows which),
+or pick free ports in `.env` and run `docker compose up -d` again:
+
+```bash
+WEB_PORT=8010            # API on http://<host>:8010
+MINIO_PORT=9010          # also MINIO_CONSOLE_PORT, MAILPIT_SMTP_PORT,
+MAILPIT_UI_PORT=8026     # MAILPIT_UI_PORT, POSTGRES_PORT, REDIS_PORT
+```
+
+On a server reached by IP or domain, also set `DJANGO_ALLOWED_HOSTS` (and
+`CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_URL`) in `.env`,
+otherwise Django answers `400 Bad Request`.
+
 ## Local development without Docker
 
 Requires Python 3.12 and PostgreSQL 16 + Redis 7.
