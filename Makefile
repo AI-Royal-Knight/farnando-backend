@@ -52,7 +52,7 @@ docker-build:
 
 docker-check:
 	DJANGO_SETTINGS_MODULE=config.settings.production \
-	DJANGO_SECRET_KEY=build-check-only \
+	DJANGO_SECRET_KEY=build-check-only-long-random-placeholder-0123456789abcdef \
 	DJANGO_ALLOWED_HOSTS=api.example.com \
 	DATABASE_URL=postgres://u:p@localhost:5432/db \
 	REDIS_URL=redis://localhost:6379/0 \
@@ -63,4 +63,5 @@ docker-check:
 	EMAIL_BACKEND=anymail.backends.mailgun.EmailBackend \
 	CAPTCHA_VERIFIER=apps.core.captcha.TurnstileCaptchaVerifier \
 	CAPTCHA_SECRET_KEY=ci-captcha-secret \
+	PAYMENT_PROVIDER=apps.assessments.payments.CulqiPaymentProvider \
 	uv run python manage.py check --deploy

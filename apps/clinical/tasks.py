@@ -40,7 +40,7 @@ STAFF_ALERTS = {
 }
 
 
-@shared_task(acks_late=True, time_limit=60)  # type: ignore[untyped-decorator]
+@shared_task(acks_late=True, time_limit=60, soft_time_limit=45)  # type: ignore[untyped-decorator]
 def send_staff_alert(kind: str) -> int:
     subject, message = STAFF_ALERTS[kind]
     sent = 0
@@ -55,21 +55,21 @@ def send_staff_alert(kind: str) -> int:
     return sent
 
 
-@shared_task(acks_late=True, time_limit=120)  # type: ignore[untyped-decorator]
+@shared_task(acks_late=True, time_limit=120, soft_time_limit=100)  # type: ignore[untyped-decorator]
 def generate_prescription_pdf(prescription_id: str) -> str | None:
     from apps.clinical.documents import generate_pdf
 
     return generate_pdf(prescription_id)
 
 
-@shared_task(acks_late=True, time_limit=120)  # type: ignore[untyped-decorator]
+@shared_task(acks_late=True, time_limit=120, soft_time_limit=100)  # type: ignore[untyped-decorator]
 def scan_prescription_document(document_id: str) -> None:
     from apps.clinical.documents import scan
 
     scan(document_id)
 
 
-@shared_task(acks_late=True, time_limit=600)  # type: ignore[untyped-decorator]
+@shared_task(acks_late=True, time_limit=600, soft_time_limit=540)  # type: ignore[untyped-decorator]
 def run_clinical_jobs() -> dict[str, Any]:
     from apps.clinical.evaluations import auto_release_stale_claims
     from apps.clinical.treatments import apply_due_versions

@@ -270,3 +270,20 @@ def test_specialty_restricted_queue(make_auth_client: Callable[[User], APIClient
     assert make_auth_client(insider).get("/api/v1/clinical/evaluations/").json()["count"] == 1
     assert make_auth_client(outsider).get("/api/v1/clinical/evaluations/").json()["count"] == 0
     assert Subscription.objects.count() == 0
+
+
+def test_physician_directory_for_assignment(
+    support: APIClient, make_auth_client: Callable[[User], APIClient]
+) -> None:
+    first = make_physician(name="Ana Doc")
+    second = make_physician(name="Beto Doc")
+
+    response = support.get("/api/v1/staff/physicians/")
+    assert response.status_code == 200, response.json()
+    rows = response.json()
+    assert [row["physician"]["id"] for row in rows] == [str(first.pk), str(second.pk)]
+    assert all(row["queue_size"] == 0 for row in rows)
+    assert {"specialty", "accepting_new_consultations"} <= set(rows[0])
+
+    patient = make_auth_client(PatientFactory())
+    assert patient.get("/api/v1/staff/physicians/").status_code == 403

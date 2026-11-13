@@ -191,6 +191,9 @@ class PaymentService:
         )
         if result.status == PaymentStatus.FAILED:
             raise PaymentFailed(result.failure_code or "The payment was declined.")
+        from apps.payments.services import schedule_auto_confirm
+
+        schedule_auto_confirm(payment)
         return payment
 
     @staticmethod

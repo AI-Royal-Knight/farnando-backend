@@ -52,6 +52,9 @@ else:
 
 CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
 
+# The fake payment provider never sends webhooks, so settle its charges immediately.
+PAYMENTS_AUTO_CONFIRM = env.bool("PAYMENTS_AUTO_CONFIRM", default=True)
+
 REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [
     "rest_framework.renderers.JSONRenderer",
     "rest_framework.renderers.BrowsableAPIRenderer",

@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 import structlog
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import QuerySet
 from django.utils import timezone
@@ -71,7 +72,33 @@ def charge(
     )
     if result.status == PaymentStatus.FAILED and raise_on_decline:
         raise PaymentFailed(result.failure_code or "The payment was declined.")
+    schedule_auto_confirm(payment)
     return payment
+
+
+def auto_confirm_enabled() -> bool:
+    """Local/compose only: settle fake-provider charges without a provider webhook."""
+
+    return bool(getattr(settings, "PAYMENTS_AUTO_CONFIRM", False)) and str(
+        getattr(settings, "PAYMENT_PROVIDER", "")
+    ).endswith("FakePaymentProvider")
+
+
+def schedule_auto_confirm(payment: Payment) -> None:
+    """After commit, apply the same transition a verified CHARGE_SUCCEEDED webhook would."""
+
+    if not auto_confirm_enabled() or payment.status != PaymentStatus.PENDING:
+        return
+    payment_id = payment.pk
+
+    def _confirm() -> None:
+        with transaction.atomic():
+            locked = Payment.objects.select_for_update().filter(pk=payment_id).first()
+            if locked is not None and locked.status == PaymentStatus.PENDING:
+                _charge_succeeded(locked)
+        logger.info("payment_auto_confirmed", payment_id=str(payment_id))
+
+    transaction.on_commit(_confirm)
 
 
 def request_refund(payment: Payment) -> None:

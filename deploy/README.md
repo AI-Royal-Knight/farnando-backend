@@ -102,6 +102,8 @@ services:
         sync: false
       - key: CAPTCHA_REQUIRED
         value: "True"
+      - key: PAYMENT_PROVIDER
+        value: apps.assessments.payments.CulqiPaymentProvider
       - key: SUPPORT_NOTIFICATION_EMAILS
         sync: false
       - key: COMPLAINT_RESPONSE_SLA_HOURS

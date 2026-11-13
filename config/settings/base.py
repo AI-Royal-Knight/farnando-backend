@@ -564,6 +564,13 @@ WHITENOISE_MANIFEST_STRICT = True
 # Email
 # ---------------------------------------------------------------------------
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
+# Used by the SMTP backend (e.g. Mailpit in docker compose); API backends such as Anymail ignore them.
+EMAIL_HOST = env("EMAIL_HOST", default="localhost")
+EMAIL_PORT = env.int("EMAIL_PORT", default=25)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
+EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=10)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Adelgaceya <no-reply@adelgaceya.pe>")
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 EMAIL_SERVICE = env("EMAIL_SERVICE", default="apps.core.email.DjangoEmailService")
@@ -649,6 +656,9 @@ LAB_DOWNLOAD_URL_TTL_SECONDS = env.int("LAB_DOWNLOAD_URL_TTL_SECONDS", default=5
 # Integration ports. Production must replace these with real adapters before
 # enabling payments or lab uploads.
 PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="apps.assessments.payments.FakePaymentProvider")
+# Local/compose only: settle fake-provider charges at once instead of waiting for a webhook.
+# Production refuses to start with this on (config/settings/production.py).
+PAYMENTS_AUTO_CONFIRM = env.bool("PAYMENTS_AUTO_CONFIRM", default=False)
 
 # ---------------------------------------------------------------------------
 # Part 3: patient portal ([OPEN] values are configuration, not constants)

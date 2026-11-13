@@ -37,6 +37,7 @@ urlpatterns = [
         name="patient-reactivate",
     ),
     # Evaluations (5)
+    path("staff/physicians/", v.StaffPhysicianListView.as_view(), name="physicians"),
     path("staff/evaluations/", v.StaffEvaluationListView.as_view(), name="evaluations"),
     path(
         "staff/evaluations/<uuid:evaluation_id>/",

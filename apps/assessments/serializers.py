@@ -477,7 +477,9 @@ class EvaluationSerializer(serializers.ModelSerializer[Evaluation]):
         prescription = getattr(obj, "prescription", None)
         if prescription is None:
             return None
-        return PrescriptionSummarySerializer(prescription).data
+        data = dict(PrescriptionSummarySerializer(prescription).data)
+        data["can_order"] = bool(data["can_order"]) and not services.has_placed_order(obj)
+        return data
 
     def get_alternative_care(self, obj: Evaluation) -> dict[str, Any] | None:
         if obj.status != EvaluationStatus.NOT_SUITABLE:

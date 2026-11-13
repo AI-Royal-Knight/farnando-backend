@@ -661,3 +661,33 @@ def test_renewal_failure_webhook_and_auto_resume(
 def test_subscription_and_card_endpoints_are_patient_only(staff_client: APIClient) -> None:
     assert staff_client.get("/api/v1/subscriptions/").status_code == 403
     assert staff_client.get("/api/v1/payment-methods/").status_code == 403
+
+
+def test_placed_order_completes_journey_and_blocks_reorder(
+    auth_client: APIClient, patient_user: User, physician: User, address: Any
+) -> None:
+    from apps.assessments.models import Prescription
+
+    give_consents(patient_user)
+    assessment, evaluation = make_evaluation(patient_user, "APPROVED", physician=physician)
+    Prescription.objects.get_or_create(
+        evaluation=evaluation,
+        defaults={"medication_name": "Semaglutide", "dosage_label": "0.25 mg"},
+    )
+    treatment = make_treatment(patient_user, physician, evaluation=evaluation)
+
+    def state() -> tuple[str, bool]:
+        detail = auth_client.get(f"/api/v1/assessments/{assessment.pk}/").json()
+        order_step = next(item["state"] for item in detail["journey"] if item["step"] == "ORDER")
+        evaluation_view = auth_client.get(f"/api/v1/assessments/{assessment.pk}/evaluation/").json()
+        return order_step, evaluation_view["prescription"]["can_order"]
+
+    assert state() == ("ACTIVE", True)
+
+    response = place(auth_client, checkout_body(treatment, address))
+    assert response.status_code == 201, response.json()
+    # An unpaid order does not count: the patient can still finish or retry checkout.
+    assert state() == ("ACTIVE", True)
+
+    Order.objects.filter(pk=response.json()["id"]).update(status="PRESCRIPTION_VERIFIED")
+    assert state() == ("DONE", False)

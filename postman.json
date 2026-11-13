@@ -11520,6 +11520,37 @@
           ]
         },
         {
+          "name": "Physicians",
+          "item": [
+            {
+              "name": "Physicians available for assignment",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/staff/physicians/",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "staff",
+                    "physicians",
+                    ""
+                  ]
+                },
+                "description": "Physicians available for assignment"
+              }
+            }
+          ]
+        },
+        {
           "name": "Subscriptions",
           "item": [
             {

@@ -70,3 +70,16 @@ def test_test_settings_do_not_use_redis_or_real_email() -> None:
     assert "locmem" in backend or "dummy" in backend
     assert settings.EMAIL_BACKEND.endswith("locmem.EmailBackend")
     assert settings.AXES_ENABLED is False
+
+
+def test_smtp_settings_are_read_from_the_environment(monkeypatch) -> None:
+    """Compose sends mail to Mailpit through EMAIL_HOST/EMAIL_PORT; they must not be ignored."""
+    import importlib
+
+    import config.settings.base as base
+
+    monkeypatch.setenv("EMAIL_HOST", "mailpit")
+    monkeypatch.setenv("EMAIL_PORT", "1025")
+    importlib.reload(base)
+    assert base.EMAIL_HOST == "mailpit"
+    assert base.EMAIL_PORT == 1025

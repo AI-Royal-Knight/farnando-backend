@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
-from typing import Any
+from typing import Any, cast
 
 from django.db import transaction
 from django.db.models import Case, CharField, Count, F, Q, QuerySet, Value, When
@@ -168,6 +168,29 @@ def _available_soon(user_ids: list[Any]) -> set[Any]:
         ).values_list("physician_id", flat=True)
     )
     return available
+
+
+def assignable_physicians() -> list[dict[str, Any]]:
+    """Verified, active physicians staff can assign patients or evaluations to."""
+    profiles = list(
+        ClinicianProfile.objects.filter(
+            verification_status=PhysicianVerificationStatus.VERIFIED,
+            user__role=Role.PHYSICIAN,
+            user__is_active=True,
+        ).select_related("user", "specialty_ref")
+    )
+    sizes = _queue_sizes([profile.user_id for profile in profiles])
+    rows = [
+        {
+            "physician": physician_summary(profile.user),
+            "specialty": profile.specialty_ref.name if profile.specialty_ref else None,
+            "accepting_new_consultations": profile.accepts_new_consultations,
+            "queue_size": sizes.get(profile.user_id, 0),
+        }
+        for profile in profiles
+    ]
+    rows.sort(key=lambda row: str(cast(dict[str, Any], row["physician"])["name"]))
+    return rows
 
 
 def recommendations(evaluation: Evaluation, *, limit: int = 5) -> list[dict[str, Any]]:

@@ -279,6 +279,14 @@ class StaffEvaluationDetailView(StaffView):
         return response
 
 
+class StaffPhysicianListView(StaffView):
+    required_permission = Permission.EVALUATIONS_ASSIGN
+
+    @doc(TAG, "Physicians available for assignment")
+    def get(self, request: Request) -> Response:
+        return Response(staff_evaluations.assignable_physicians())
+
+
 class StaffEvaluationRecommendedView(StaffView):
     required_permission = Permission.EVALUATIONS_ASSIGN
 

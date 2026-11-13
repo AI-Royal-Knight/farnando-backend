@@ -53,6 +53,11 @@ if not CSRF_TRUSTED_ORIGINS:
 
 ENABLE_API_DOCS = env.bool("ENABLE_API_DOCS", default=False)
 API_DOCS_PUBLIC = False  # production docs always require staff/admin
+if str(PAYMENT_PROVIDER).endswith("FakePaymentProvider"):
+    raise ImproperlyConfigured("PAYMENT_PROVIDER must be a real provider in production.")
+if env.bool("PAYMENTS_AUTO_CONFIRM", default=False):
+    raise ImproperlyConfigured("PAYMENTS_AUTO_CONFIRM is for local development only.")
+PAYMENTS_AUTO_CONFIRM = False
 CAPTCHA_REQUIRED = env.bool("CAPTCHA_REQUIRED", default=True)
 if CAPTCHA_REQUIRED:
     _require("CAPTCHA_SECRET_KEY")

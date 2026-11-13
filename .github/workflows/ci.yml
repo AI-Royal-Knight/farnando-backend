@@ -93,6 +93,7 @@ jobs:
           EMAIL_BACKEND: anymail.backends.mailgun.EmailBackend
           CAPTCHA_VERIFIER: apps.core.captcha.TurnstileCaptchaVerifier
           CAPTCHA_SECRET_KEY: ci-captcha-secret
+          PAYMENT_PROVIDER: apps.assessments.payments.CulqiPaymentProvider
         run: uv run python manage.py check --deploy
 
       - name: pip-audit

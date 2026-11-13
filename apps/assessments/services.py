@@ -987,6 +987,23 @@ def evaluation_checklist(evaluation: Evaluation) -> list[dict[str, str]]:
     ]
 
 
+def has_placed_order(evaluation: Evaluation) -> bool:
+    """True once the patient ordered (and did not abandon) medication from this evaluation."""
+    from apps.orders.models import Order, OrderStatus
+
+    abandoned = (
+        OrderStatus.PENDING_PAYMENT,
+        OrderStatus.PAYMENT_FAILED,
+        OrderStatus.CANCELLED,
+        OrderStatus.REFUNDED,
+    )
+    return (
+        Order.objects.filter(treatment__evaluation=evaluation)
+        .exclude(status__in=abandoned)
+        .exists()
+    )
+
+
 def journey_for(assessment: Assessment) -> list[dict[str, str]]:
     evaluation = Evaluation.objects.filter(assessment=assessment).first()
     status = evaluation.status if evaluation is not None else ""
@@ -1028,7 +1045,11 @@ def journey_for(assessment: Assessment) -> list[dict[str, str]]:
         else ChecklistState.PENDING
     )
     order = (
-        ChecklistState.PENDING
+        (
+            ChecklistState.DONE
+            if evaluation is not None and has_placed_order(evaluation)
+            else ChecklistState.ACTIVE
+        )
         if status == EvaluationStatus.APPROVED
         else ChecklistState.BLOCKED
         if status in (EvaluationStatus.NOT_SUITABLE, EvaluationStatus.CANCELLED)
