@@ -58,6 +58,10 @@ if str(PAYMENT_PROVIDER).endswith("FakePaymentProvider"):
 if env.bool("PAYMENTS_AUTO_CONFIRM", default=False):
     raise ImproperlyConfigured("PAYMENTS_AUTO_CONFIRM is for local development only.")
 PAYMENTS_AUTO_CONFIRM = False
+if str(PAYMENT_PROVIDER).endswith("CulqiPaymentProvider") and not env(
+    "CULQI_SECRET_KEY", default=""
+):
+    raise ImproperlyConfigured("CULQI_SECRET_KEY is required with the Culqi payment provider.")
 CAPTCHA_REQUIRED = env.bool("CAPTCHA_REQUIRED", default=True)
 if CAPTCHA_REQUIRED:
     _require("CAPTCHA_SECRET_KEY")

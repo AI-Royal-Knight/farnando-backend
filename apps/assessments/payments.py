@@ -44,6 +44,18 @@ class RefundResult:
     status: str
 
 
+@dataclass(frozen=True)
+class CustomerInfo:
+    """Who owns a stored card. Culqi requires these on its customer record."""
+
+    email: str
+    first_name: str
+    last_name: str
+    phone: str
+    address: str
+    city: str
+
+
 class CardRejected(Exception):
     """The provider refused to store a card token."""
 
@@ -56,9 +68,12 @@ class PaymentProvider(Protocol):
         currency: str,
         provider_token: str,
         idempotency_key: str,
+        email: str = "",
     ) -> PaymentResult: ...
 
-    def create_card(self, *, provider_token: str, customer_ref: str) -> CardResult: ...
+    def create_card(
+        self, *, provider_token: str, customer_ref: str, customer: CustomerInfo | None = None
+    ) -> CardResult: ...
 
     def refund(
         self, *, provider_payment_id: str, amount: Decimal, currency: str, idempotency_key: str
@@ -75,8 +90,9 @@ class FakePaymentProvider:
         currency: str,
         provider_token: str,
         idempotency_key: str,
+        email: str = "",
     ) -> PaymentResult:
-        _ = amount, currency, idempotency_key
+        _ = amount, currency, idempotency_key, email
         if provider_token.lower().startswith("fail"):
             return PaymentResult(
                 status=PaymentStatus.FAILED,
@@ -94,8 +110,10 @@ class FakePaymentProvider:
             provider_payment_id=f"fake_{uuid.uuid4().hex}",
         )
 
-    def create_card(self, *, provider_token: str, customer_ref: str) -> CardResult:
-        _ = customer_ref
+    def create_card(
+        self, *, provider_token: str, customer_ref: str, customer: CustomerInfo | None = None
+    ) -> CardResult:
+        _ = customer_ref, customer
         if provider_token.lower().startswith("fail"):
             raise CardRejected("The card was rejected.")
         return CardResult(
@@ -114,7 +132,11 @@ class FakePaymentProvider:
 
 
 class CulqiPaymentProvider:
-    """Production adapter placeholder until the Culqi contract is confirmed."""
+    """Culqi API v2. The browser tokenizes the card; this charges, stores and refunds it.
+
+    A synchronous approval is still recorded as PENDING (see ``PaymentService.create``);
+    ``verify_charge`` lets the caller confirm it with Culqi when no webhook can reach us.
+    """
 
     def create_payment(
         self,
@@ -123,19 +145,137 @@ class CulqiPaymentProvider:
         currency: str,
         provider_token: str,
         idempotency_key: str,
+        email: str = "",
     ) -> PaymentResult:
-        _ = amount, currency, provider_token, idempotency_key
-        raise ServiceUnavailable("Culqi is not configured in this environment.")
+        from apps.payments import culqi_api
 
-    def create_card(self, *, provider_token: str, customer_ref: str) -> CardResult:
-        _ = provider_token, customer_ref
-        raise ServiceUnavailable("Culqi is not configured in this environment.")
+        body = {
+            "amount": culqi_api.to_cents(amount),
+            "currency_code": currency,
+            "email": email,
+            "source_id": provider_token,
+            # Culqi has no idempotency header; single-use tokens prevent a double charge.
+            "metadata": {"idempotency_key": idempotency_key},
+        }
+        try:
+            charge = culqi_api.request("POST", "charges", body)
+        except culqi_api.CulqiError as exc:
+            return PaymentResult(
+                status=PaymentStatus.FAILED,
+                provider_payment_id=str(exc.body.get("charge_id") or ""),
+                failure_code=exc.code or "declined",
+            )
+        if charge.get("action_code") == "REVIEW":
+            # 3-D Secure is required; the checkout does not run Culqi 3DS yet.
+            return PaymentResult(
+                status=PaymentStatus.FAILED,
+                provider_payment_id=str(charge.get("id") or ""),
+                failure_code="3ds_required",
+            )
+        approved = (charge.get("outcome") or {}).get("type") == culqi_api.APPROVED
+        return PaymentResult(
+            status=PaymentStatus.SUCCEEDED if approved else PaymentStatus.PENDING,
+            provider_payment_id=str(charge.get("id") or ""),
+        )
+
+    def verify_charge(self, provider_payment_id: str) -> bool | None:
+        """True when Culqi reports the charge approved, False when declined, None if unknown."""
+
+        from apps.payments import culqi_api
+
+        if not provider_payment_id:
+            return None
+        try:
+            charge = culqi_api.request("GET", f"charges/{culqi_api.quote(provider_payment_id)}")
+        except (culqi_api.CulqiError, ServiceUnavailable):
+            return None
+        outcome = (charge.get("outcome") or {}).get("type")
+        if outcome == culqi_api.APPROVED:
+            return True
+        return False if outcome else None
+
+    def create_card(
+        self, *, provider_token: str, customer_ref: str, customer: CustomerInfo | None = None
+    ) -> CardResult:
+        from apps.payments import culqi_api
+
+        if customer is None or not customer.email:
+            raise CardRejected("A customer email is required to store a card.")
+        try:
+            customer_id = self._customer_id(customer)
+            token = culqi_api.request("GET", f"tokens/{culqi_api.quote(provider_token)}")
+            card = culqi_api.request(
+                "POST",
+                "cards",
+                {
+                    "customer_id": customer_id,
+                    "token_id": provider_token,
+                    "metadata": {"ref": customer_ref},
+                },
+            )
+        except culqi_api.CulqiError as exc:
+            raise CardRejected(exc.user_message or "The card was rejected.") from exc
+        source = card.get("source") or {}
+        expiry = token.get("metadata") or {}
+        return CardResult(
+            provider_card_id=str(card.get("id") or ""),
+            brand=str((source.get("iin") or {}).get("card_brand") or "Card")[:30],
+            last4=str(source.get("last_four") or "")[-4:],
+            exp_month=_int(expiry.get("exp_month"), 12),
+            exp_year=_int(expiry.get("exp_year"), 2099),
+        )
+
+    @staticmethod
+    def _customer_id(customer: CustomerInfo) -> str:
+        """Culqi allows one customer per email, so reuse it when it already exists."""
+
+        from apps.payments import culqi_api
+
+        found = culqi_api.request("GET", f"customers?email={culqi_api.quote(customer.email)}")
+        for row in found.get("data") or []:
+            if row.get("id"):
+                return str(row["id"])
+        created = culqi_api.request(
+            "POST",
+            "customers",
+            {
+                "first_name": customer.first_name[:50] or "Paciente",
+                "last_name": customer.last_name[:50] or "Adelgaceya",
+                "email": customer.email,
+                "address": customer.address[:100] or "Lima",
+                "address_city": customer.city[:30] or "Lima",
+                "country_code": "PE",
+                "phone_number": customer.phone or "999999999",
+            },
+        )
+        return str(created["id"])
 
     def refund(
         self, *, provider_payment_id: str, amount: Decimal, currency: str, idempotency_key: str
     ) -> RefundResult:
-        _ = provider_payment_id, amount, currency, idempotency_key
-        raise ServiceUnavailable("Culqi is not configured in this environment.")
+        from apps.payments import culqi_api
+
+        _ = currency, idempotency_key
+        try:
+            refund = culqi_api.request(
+                "POST",
+                "refunds",
+                {
+                    "amount": culqi_api.to_cents(amount),
+                    "charge_id": provider_payment_id,
+                    "reason": "solicitud_comprador",
+                },
+            )
+        except culqi_api.CulqiError as exc:
+            raise ServiceUnavailable(exc.user_message or "The refund was not accepted.") from exc
+        return RefundResult(provider_refund_id=str(refund.get("id") or ""), status="PENDING")
+
+
+def _int(value: Any, default: int) -> int:
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return default
 
 
 def get_payment_provider() -> PaymentProvider:
@@ -171,6 +311,7 @@ class PaymentService:
             currency=fee.currency,
             provider_token=provider_token,
             idempotency_key=idempotency_key,
+            email=evaluation.assessment.user.email,
         )
         status = result.status
         if status == PaymentStatus.SUCCEEDED:

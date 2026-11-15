@@ -12,7 +12,7 @@ from rest_framework import serializers
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
-from apps.assessments.payments import CulqiPaymentProvider
+from apps.assessments.payments import CardRejected, CulqiPaymentProvider
 from apps.consultations.video import get_video_provider
 from apps.core.exceptions import ServiceUnavailable
 from apps.payments.models import WebhookEvent
@@ -43,9 +43,10 @@ def test_daily_provider_placeholder(auth_client: APIClient, patient_user: User) 
     assert response.json()["code"] == "service_unavailable"
 
 
-def test_culqi_provider_placeholder() -> None:
+@override_settings(CULQI_SECRET_KEY="")
+def test_culqi_provider_unconfigured() -> None:
     provider = CulqiPaymentProvider()
-    with pytest.raises(ServiceUnavailable):
+    with pytest.raises(CardRejected):
         provider.create_card(provider_token="x", customer_ref="y")
     with pytest.raises(ServiceUnavailable):
         provider.refund(

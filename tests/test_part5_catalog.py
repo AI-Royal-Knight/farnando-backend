@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -9,6 +10,7 @@ from rest_framework.test import APIClient
 
 from apps.assessments.models import Program, QuestionnaireVersion
 from apps.clinical.models import Specialty
+from apps.orders.models import Package, PackageItem
 from apps.treatments.models import Product
 from tests.factories.part3 import program
 
@@ -343,3 +345,28 @@ def test_questionnaire_draft_edits_and_deletes(admin_client: APIClient) -> None:
     ).json()
     assert admin_client.delete(f"/api/v1/admin/questions/{question['id']}/").status_code == 204
     assert admin_client.delete(f"/api/v1/admin/questionnaire-steps/{step_id}/").status_code == 204
+
+
+def test_partial_package_update_keeps_one_time_billing(admin_client: APIClient) -> None:
+    """Renaming a legacy one-time package (no cadence) must not make it recurring."""
+    product = Product.objects.get(code="semaglutide-0-5")
+    package = Package.objects.create(
+        program=program(),
+        name="Legacy one-time",
+        supply_duration_weeks=4,
+        billing_cadence="",
+        billing_type="ONE_TIME",
+        display_price_per_month=Decimal("599.00"),
+        charge_per_cycle=Decimal("599.00"),
+        currency="PEN",
+    )
+    PackageItem.objects.create(package=package, product=product, quantity=1, position=0)
+    response = admin_client.patch(
+        f"{PACKAGES}{package.pk}/",
+        {"name": "Renamed", "included_services": ["Physician review"]},
+        format="json",
+    )
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["name"] == "Renamed"
+    assert body["billing_type"] == "ONE_TIME" and body["billing_interval_months"] is None

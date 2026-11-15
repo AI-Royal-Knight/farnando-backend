@@ -88,6 +88,10 @@ LOGGING["root"]["level"] = "WARNING"
 LOGGING["loggers"]["django"]["level"] = "WARNING"
 
 CULQI_WEBHOOK_SECRET = "test-culqi-webhook-secret"
+# Tests never reach the real provider, whatever a developer's .env selects.
+PAYMENT_PROVIDER = "apps.assessments.payments.FakePaymentProvider"
+PAYMENTS_AUTO_CONFIRM = False
+CULQI_SECRET_KEY = ""
 DAILY_WEBHOOK_SECRET = "test-daily-webhook-secret"
 
 # MFA enforcement is exercised explicitly in tests/test_part4_auth.py.

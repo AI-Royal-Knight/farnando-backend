@@ -417,7 +417,10 @@ def save_package(
         settings.PACKAGE_SUPPLY_WEEKS
     ):
         raise ValidationError({"supply_duration_weeks": ["Unsupported duration."]})
-    cadence = data.get("billing_cadence", target.billing_cadence or BillingCadence.MONTHLY)
+    # An existing package keeps its cadence (legacy one-time packages have none), so a partial
+    # update such as a rename never turns a one-time package into a subscription.
+    default_cadence = BillingCadence.MONTHLY if creating else target.billing_cadence
+    cadence = data.get("billing_cadence", default_cadence or "")
     monthly = data.get("display_price_per_month") or (
         money(target.monthly_price, target.currency) if not creating else None
     )
@@ -425,7 +428,8 @@ def save_package(
         money(target.price, target.currency) if not creating else None
     )
     if (
-        monthly
+        cadence
+        and monthly
         and charge
         and ({"billing_cadence", "display_price_per_month", "charge_per_cycle"} & set(data))
     ):

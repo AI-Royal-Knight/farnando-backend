@@ -659,6 +659,14 @@ PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="apps.assessments.payments.Fa
 # Local/compose only: settle fake-provider charges at once instead of waiting for a webhook.
 # Production refuses to start with this on (config/settings/production.py).
 PAYMENTS_AUTO_CONFIRM = env.bool("PAYMENTS_AUTO_CONFIRM", default=False)
+# Culqi (PAYMENT_PROVIDER=apps.assessments.payments.CulqiPaymentProvider). The public key lives
+# in the frontend; only the secret key is needed here.
+CULQI_SECRET_KEY = env("CULQI_SECRET_KEY", default="")
+CULQI_API_URL = env("CULQI_API_URL", default="https://api.culqi.com/v2")
+CULQI_TIMEOUT = env.int("CULQI_TIMEOUT", default=20)
+# Confirm a synchronous approval by reading the charge back from Culqi (the webhook, when it
+# arrives, is idempotent with this).
+CULQI_VERIFY_CHARGES = env.bool("CULQI_VERIFY_CHARGES", default=True)
 
 # ---------------------------------------------------------------------------
 # Part 3: patient portal ([OPEN] values are configuration, not constants)

@@ -17,7 +17,12 @@ from rest_framework.exceptions import ValidationError
 from apps.accounts.models import User
 from apps.assessments.enums import FeeStatus, PaymentPurpose, PaymentStatus
 from apps.assessments.models import Payment
-from apps.assessments.payments import CardRejected, PaymentService, get_payment_provider
+from apps.assessments.payments import (
+    CardRejected,
+    CustomerInfo,
+    PaymentService,
+    get_payment_provider,
+)
 from apps.core.exceptions import PaymentFailed, PaymentMethodInUse
 from apps.payments import culqi, daily
 from apps.payments.models import SavedPaymentMethod, WebhookEvent, WebhookProvider
@@ -55,6 +60,7 @@ def charge(
         currency=currency,
         provider_token=provider_token,
         idempotency_key=idempotency_key,
+        email=user.email,
     )
     status = PaymentStatus.PENDING if result.status == PaymentStatus.SUCCEEDED else result.status
     payment = Payment.objects.create(
@@ -84,14 +90,31 @@ def auto_confirm_enabled() -> bool:
     ).endswith("FakePaymentProvider")
 
 
+def verifies_charges() -> bool:
+    """Real providers that can be asked about a charge (Culqi) are confirmed via their API,
+    which is as trustworthy as the webhook and works where no webhook can reach the server."""
+
+    return bool(getattr(settings, "CULQI_VERIFY_CHARGES", True)) and hasattr(
+        get_payment_provider(), "verify_charge"
+    )
+
+
 def schedule_auto_confirm(payment: Payment) -> None:
     """After commit, apply the same transition a verified CHARGE_SUCCEEDED webhook would."""
 
-    if not auto_confirm_enabled() or payment.status != PaymentStatus.PENDING:
+    if payment.status != PaymentStatus.PENDING:
+        return
+    fake = auto_confirm_enabled()
+    if not fake and not verifies_charges():
         return
     payment_id = payment.pk
+    provider_payment_id = payment.provider_payment_id
 
     def _confirm() -> None:
+        if not fake:
+            provider: Any = get_payment_provider()
+            if provider.verify_charge(provider_payment_id) is not True:
+                return
         with transaction.atomic():
             locked = Payment.objects.select_for_update().filter(pk=payment_id).first()
             if locked is not None and locked.status == PaymentStatus.PENDING:
@@ -124,10 +147,29 @@ def active_methods(user: User) -> QuerySet[SavedPaymentMethod]:
     return SavedPaymentMethod.objects.filter(user=user, is_deleted=False)
 
 
+def _customer_of(user: User) -> CustomerInfo:
+    from apps.patients.models import Address
+
+    address = Address.objects.filter(user=user).select_related("ubigeo").first()
+    profile = getattr(user, "patient_profile", None)
+    names = (user.full_name or user.email.split("@")[0]).split(" ", 1)
+    phone = (getattr(profile, "phone", "") or (address.phone if address else "")).lstrip("+")
+    if phone.startswith("51") and len(phone) == 11:
+        phone = phone[2:]
+    return CustomerInfo(
+        email=user.email,
+        first_name=names[0],
+        last_name=names[1] if len(names) > 1 else names[0],
+        phone=phone,
+        address=address.line1 if address else "",
+        city=getattr(getattr(address, "ubigeo", None), "name", "") if address else "",
+    )
+
+
 def save_card(*, user: User, provider_token: str) -> SavedPaymentMethod:
     try:
         card = get_payment_provider().create_card(
-            provider_token=provider_token, customer_ref=str(user.pk)
+            provider_token=provider_token, customer_ref=str(user.pk), customer=_customer_of(user)
         )
     except CardRejected as exc:
         raise ValidationError({"provider_token": ["The card was rejected."]}) from exc
