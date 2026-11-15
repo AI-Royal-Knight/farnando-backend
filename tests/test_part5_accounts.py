@@ -278,3 +278,25 @@ def test_staff_profile_missing_means_no_permissions(
         "orders_processing_count": None,
         "avg_first_response_minutes": None,
     }
+
+
+def test_invited_staff_activated_in_django_admin_gets_permissions(
+    admin_client: APIClient, make_auth_client: Callable[[User], APIClient]
+) -> None:
+    """Setting a password and ticking "active" in Django admin finishes the invitation."""
+
+    member = invite(admin_client, staff_type="SUPPORT_AGENT").json()
+    user = User.objects.get(pk=member["id"])
+    user.is_active = True
+    user.is_email_verified = True
+    user.save()
+    assert StaffProfile.objects.get(user=user).status == "INVITED"  # no password yet
+    client = make_auth_client(user)
+    assert client.get("/api/v1/staff/tickets/").status_code == 403
+    user.set_password("Str0ng-Passw0rd!2026")
+    user.save()
+
+    assert StaffProfile.objects.get(user=user).status == "ACTIVE"
+    assert StaffInvitation.objects.get(user=user).status == "ACCEPTED"
+    assert AuditLog.objects.filter(action="staff.activated_without_invitation").count() == 1
+    assert client.get("/api/v1/staff/tickets/").status_code == 200

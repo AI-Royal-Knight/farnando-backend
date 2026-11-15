@@ -33,7 +33,7 @@ from apps.staff.models import (
     StaffInvitationStatus,
     StaffProfile,
 )
-from apps.staff.permissions import MissingPermission
+from apps.staff.permissions import MissingPermission, staff_profile
 
 
 def _self_guard(actor: User, target: User) -> None:
@@ -369,6 +369,7 @@ def accept_staff_invitation(*, token: str, data: dict[str, Any], request: Any) -
             raise ValidationError({"password": messages}) from exc
         ConsentService.validate_items(data["consents"], require_required=True)
         user.set_password(data["password"])
+        user._accepting_staff_invitation = True  # type: ignore[attr-defined]  # see signals.py
         user.is_active = True
         user.is_email_verified = True
         user.email_verified_at = timezone.now()
@@ -397,8 +398,37 @@ def accept_staff_invitation(*, token: str, data: dict[str, Any], request: Any) -
     return user
 
 
+def activate_invited_staff(user: User) -> bool:
+    """Finish the invitation of a staff account that was activated some other way.
+
+    Admins sometimes set the password and tick "active" in the Django admin instead of having
+    the person accept the emailed invitation. The profile would then stay INVITED, which grants
+    no permissions, so every staff endpoint answers 403. Returns True when it changed anything.
+    """
+
+    if user.role != Role.STAFF or not user.is_active or not user.has_usable_password():
+        return False
+    profile = staff_profile(user)
+    if profile is None or profile.status != AccountStatus.INVITED:
+        return False
+    with transaction.atomic():
+        profile.status = AccountStatus.ACTIVE
+        profile.save(update_fields=["status", "updated_at"])
+        StaffInvitation.objects.filter(user=user, status=StaffInvitationStatus.PENDING).update(
+            status=StaffInvitationStatus.ACCEPTED, accepted_at=timezone.now()
+        )
+        record_audit(
+            actor=None,
+            action="staff.activated_without_invitation",
+            object_type="User",
+            object_id=user.pk,
+        )
+    return True
+
+
 __all__ = [
     "accept_staff_invitation",
+    "activate_invited_staff",
     "create_staff",
     "delete_invited",
     "get_member",

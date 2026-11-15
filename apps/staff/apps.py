@@ -8,3 +8,6 @@ class StaffConfig(AppConfig):
     name = "apps.staff"
     label = "staff"
     verbose_name = "Staff and admin portals"
+
+    def ready(self) -> None:
+        from apps.staff import signals  # noqa: F401
