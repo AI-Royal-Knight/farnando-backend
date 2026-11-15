@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from apps.accounts.permissions import IsEmailVerified
 from apps.accounts.serializers import EmptyBodySerializer
 from apps.assessments import labs, selectors, services
 from apps.assessments.enums import AssessmentStatus, EvaluationStatus
@@ -247,7 +248,9 @@ class AssessmentSummaryView(APIView):
 
 
 class AssessmentSubmitView(APIView):
-    permission_classes = [IsPatient]
+    # Permissions run before throttles: an unverified email is refused without spending
+    # one of the patient's hourly submit attempts.
+    permission_classes = [IsPatient, IsEmailVerified]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "assessment_submit"
 

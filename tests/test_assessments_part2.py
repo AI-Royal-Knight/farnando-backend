@@ -11,6 +11,7 @@ import pytest
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from rest_framework.test import APIClient
+from rest_framework.throttling import ScopedRateThrottle
 
 from apps.accounts.models import ConsentRecord
 from apps.assessments.enums import EvaluationStatus, FeeStatus, LabUploadStatus, PaymentStatus
@@ -492,6 +493,27 @@ def test_submit_requires_verified_email(auth_client: APIClient, patient_user) ->
     )
     assert response.status_code == 403
     assert response.json()["code"] == "email_not_verified"
+
+
+def test_unverified_submits_do_not_spend_the_rate_limit(
+    auth_client: APIClient, patient_user, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Retries while the email is unverified must not lock the patient out once verified."""
+    rates = {**ScopedRateThrottle.THROTTLE_RATES, "assessment_submit": "2/hour"}
+    monkeypatch.setattr(ScopedRateThrottle, "THROTTLE_RATES", rates)
+    _status_code, created = start_assessment(auth_client, patient_user)
+    complete_steps(auth_client, created["id"])
+    patient_user.is_email_verified = False
+    patient_user.save(update_fields=["is_email_verified"])
+    url = f"/api/v1/assessments/{created['id']}/submit/"
+    for _attempt in range(4):
+        response = auth_client.post(url, {}, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()))
+        assert response.json()["code"] == "email_not_verified"
+
+    patient_user.is_email_verified = True
+    patient_user.save(update_fields=["is_email_verified"])
+    response = auth_client.post(url, {}, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()))
+    assert response.status_code == 200, response.json()
 
 
 def test_assessment_is_locked_after_submit(auth_client: APIClient, patient_user) -> None:
