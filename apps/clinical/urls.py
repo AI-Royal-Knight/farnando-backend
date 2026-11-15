@@ -22,6 +22,11 @@ urlpatterns = [
         views_profile.InvitationAcceptView.as_view(),
         name="invitation-accept",
     ),
+    path(
+        "auth/register-physician/",
+        views_profile.PhysicianRegisterView.as_view(),
+        name="register-physician",
+    ),
     path("public/specialties/", views_profile.SpecialtyListView.as_view(), name="specialties"),
     path("avatar-uploads/", views_profile.AvatarUploadCreateView.as_view(), name="avatar-uploads"),
     path(

@@ -29,6 +29,8 @@ from apps.clinical.serializers_profile import (
     InvitationSerializer,
     PhysicianProfilePatchSerializer,
     PhysicianProfileSerializer,
+    PhysicianRegisterResponseSerializer,
+    PhysicianRegisterSerializer,
     SpecialtySerializer,
     UploadInitSerializer,
 )
@@ -86,6 +88,34 @@ class InvitationAcceptView(APIView):
             "mfa_enrollment_required": mfa_required(user),
         }
         return Response(body, status=status.HTTP_201_CREATED)
+
+
+class PhysicianRegisterView(APIView):
+    """Public physician sign-up. The account starts with its license PENDING verification."""
+
+    authentication_classes: list[Any] = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    @extend_schema(
+        tags=["physicians"],
+        summary="Create a physician account pending license verification",
+        description=(
+            "Creates a PHYSICIAN user and a clinician profile with verification_status PENDING, "
+            "and emails a verification link. The physician signs in after confirming the email "
+            "(MFA enrollment first); the clinical portal stays closed until an admin verifies "
+            "the license. Requires TERMS_OF_SERVICE, PRIVACY_POLICY and CLINICIAN_AGREEMENT."
+        ),
+        auth=[],
+        request=PhysicianRegisterSerializer,
+        responses={201: PhysicianRegisterResponseSerializer, **COMMON_ERRORS},
+    )
+    def post(self, request: Request) -> Response:
+        serializer = PhysicianRegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        onboarding.register_physician(data=dict(serializer.validated_data), request=request)
+        return Response({"status": "pending_review"}, status=status.HTTP_201_CREATED)
 
 
 class SpecialtyListView(APIView):

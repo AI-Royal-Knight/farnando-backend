@@ -90,36 +90,46 @@ def _validate_consents(items: list[dict[str, Any]]) -> dict[str, Any]:
     return documents
 
 
-def accept_invitation(*, token: str, data: dict[str, Any], request: Any) -> User:
+def _physician_fields(
+    *, email: str, data: dict[str, Any], require_registration: bool
+) -> tuple[Specialty, str, str]:
+    """Checks shared by invitation acceptance and self-registration.
+
+    Returns the specialty, the normalised license number and the registration number.
+    """
+
     from django.contrib.auth.password_validation import validate_password
 
+    if User.objects.filter(email=email).exists():
+        raise ValidationError({"email": ["An account already exists for this email."]})
+    specialty = Specialty.objects.filter(pk=data["specialty_id"], is_active=True).first()
+    if specialty is None:
+        raise ValidationError({"specialty_id": ["Unknown specialty."]})
+    registration = (data.get("specialty_registration_number") or "").strip().upper()
+    if require_registration and specialty.requires_registration_number and not registration:
+        raise ValidationError({"specialty_registration_number": ["Required for this specialty."]})
+    license_number = data["license_number"].strip().upper()
+    if ClinicianProfile.objects.filter(license_number__iexact=license_number).exists():
+        raise ValidationError({"license_number": ["This license number is already registered."]})
+    if data["password"] != data["confirm_password"]:
+        raise ValidationError({"confirm_password": ["Passwords do not match."]})
+    candidate = User(email=email, full_name=data["full_name"])
+    try:
+        validate_password(data["password"], candidate)
+    except Exception as exc:
+        messages = list(getattr(exc, "messages", [str(exc)]))
+        raise ValidationError({"password": messages}) from exc
+    _validate_consents(data["consents"])
+    return specialty, license_number, registration
+
+
+def accept_invitation(*, token: str, data: dict[str, Any], request: Any) -> User:
     with transaction.atomic():
         invitation = resolve_invitation(token, lock=True)
         email = invitation.email
-        if User.objects.filter(email=email).exists():
-            raise ValidationError({"email": ["An account already exists for this email."]})
-        specialty = Specialty.objects.filter(pk=data["specialty_id"], is_active=True).first()
-        if specialty is None:
-            raise ValidationError({"specialty_id": ["Unknown specialty."]})
-        registration = (data.get("specialty_registration_number") or "").strip().upper()
-        if specialty.requires_registration_number and not registration:
-            raise ValidationError(
-                {"specialty_registration_number": ["Required for this specialty."]}
-            )
-        license_number = data["license_number"].strip().upper()
-        if ClinicianProfile.objects.filter(license_number__iexact=license_number).exists():
-            raise ValidationError(
-                {"license_number": ["This license number is already registered."]}
-            )
-        if data["password"] != data["confirm_password"]:
-            raise ValidationError({"confirm_password": ["Passwords do not match."]})
-        candidate = User(email=email, full_name=data["full_name"])
-        try:
-            validate_password(data["password"], candidate)
-        except Exception as exc:
-            messages = list(getattr(exc, "messages", [str(exc)]))
-            raise ValidationError({"password": messages}) from exc
-        _validate_consents(data["consents"])
+        specialty, license_number, registration = _physician_fields(
+            email=email, data=data, require_registration=True
+        )
         avatar = None
         if data.get("avatar_upload_id"):
             avatar = AvatarUpload.objects.filter(
@@ -170,6 +180,60 @@ def accept_invitation(*, token: str, data: dict[str, Any], request: Any) -> User
         )
         from apps.clinical.tasks import send_staff_alert
 
+        transaction.on_commit(lambda: send_staff_alert.delay("physician_pending_verification"))
+    return user
+
+
+def register_physician(*, data: dict[str, Any], request: Any) -> User:
+    """Public physician sign-up: a PHYSICIAN account whose license is PENDING verification.
+
+    The physician confirms their email and can sign in (MFA setup first), but the clinical
+    portal stays closed until an admin verifies the license (``admin/physicians/<id>/verify/``).
+    The specialty registration number is optional here; the admin checks it when verifying.
+    """
+
+    email = data["email"].strip().lower()
+    if User.objects.filter(email__iexact=email).exists():
+        # Same wording as patient sign-up, so the form does not confirm who has an account.
+        raise ValidationError({"email": ["Unable to create an account with this email."]})
+    with transaction.atomic():
+        specialty, license_number, registration = _physician_fields(
+            email=email, data=data, require_registration=False
+        )
+        user = User.objects.create_user(
+            email=email,
+            password=data["password"],
+            full_name=data["full_name"].strip(),
+            role="PHYSICIAN",
+        )
+        ClinicianProfile.objects.create(
+            user=user,
+            care_role=CareRole.PHYSICIAN,
+            display_name=data["full_name"].strip(),
+            specialty=specialty.name,
+            specialty_ref=specialty,
+            specialty_registration_number=registration,
+            license_number=license_number,
+            license_label=f"CMP {license_number}",
+            phone=data.get("phone") or "",
+            verification_status=PhysicianVerificationStatus.PENDING,
+            languages=["es"],
+        )
+        django_request = getattr(request, "_request", request)
+        ConsentService.record_many(
+            user=user, items=data["consents"], request=django_request, require_required=True
+        )
+        record_audit(
+            actor=user,
+            action="physician.self_registered",
+            object_type="User",
+            object_id=user.pk,
+            request=request,
+        )
+        from apps.accounts.services import _send_verification
+        from apps.clinical.tasks import send_staff_alert
+
+        transaction.on_commit(lambda: _send_verification(str(user.pk)))
         transaction.on_commit(lambda: send_staff_alert.delay("physician_pending_verification"))
     return user
 

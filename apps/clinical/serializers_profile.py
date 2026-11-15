@@ -45,6 +45,31 @@ class InvitationAcceptSerializer(StrictSerializer):
         return validate_e164(value, "phone")
 
 
+class PhysicianRegisterSerializer(StrictSerializer):
+    full_name = serializers.CharField(min_length=2, max_length=120)
+    email = serializers.EmailField(max_length=254)
+    license_number = serializers.RegexField(r"^[A-Za-z0-9-]{3,20}$")
+    specialty_id = serializers.UUIDField()
+    specialty_registration_number = serializers.RegexField(
+        r"^[A-Za-z0-9]{3,20}$", required=False, allow_blank=True
+    )
+    phone = serializers.CharField(max_length=16, required=False, allow_blank=True)
+    password = serializers.CharField(min_length=8, write_only=True, trim_whitespace=False)
+    confirm_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    consents = ConsentInputSerializer(many=True)
+
+    def validate_phone(self, value: str) -> str:
+        if not value:
+            return ""
+        from apps.patients.services import validate_e164
+
+        return validate_e164(value, "phone")
+
+
+class PhysicianRegisterResponseSerializer(serializers.Serializer[Any]):
+    status = serializers.CharField()
+
+
 class AcceptResponseSerializer(serializers.Serializer[Any]):
     user = UserSummarySerializer()
     tokens = serializers.DictField(child=serializers.CharField())
