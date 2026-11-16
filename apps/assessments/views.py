@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from django.conf import settings
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.exceptions import NotFound, ValidationError
@@ -16,7 +17,7 @@ from rest_framework.views import APIView
 from apps.accounts.permissions import IsEmailVerified
 from apps.accounts.serializers import EmptyBodySerializer
 from apps.assessments import labs, selectors, services
-from apps.assessments.enums import AssessmentStatus, EvaluationStatus
+from apps.assessments.enums import AssessmentStatus, EvaluationStatus, PaymentMethod
 from apps.assessments.models import Assessment, Evaluation, Program
 from apps.assessments.payments import PaymentService
 from apps.assessments.permissions import (
@@ -396,6 +397,37 @@ class AssessmentFeePayView(APIView):
             callback=pay,
         )
         return Response(result.body, status=result.status_code)
+
+
+class AssessmentFeeDemoPayView(APIView):
+    """Local/demo only: settle the fee without a provider charge.
+
+    The portal's "Skip payment" button calls this so the labs and review flow can be
+    exercised without a card. Disabled (404) unless ``DEMO_PAYMENTS_ENABLED`` is on.
+    """
+
+    permission_classes = [IsPatient]
+    throttle_classes = [AssessmentPaymentThrottle]
+
+    @extend_schema(
+        tags=["evaluations"],
+        summary="Settle the evaluation fee without a provider (demo only)",
+        description=(
+            "Disabled unless `DEMO_PAYMENTS_ENABLED` is on (local/demo). Marks the fee paid "
+            "and moves the evaluation to review, exactly like a verified webhook."
+        ),
+        request=None,
+        responses={200: PaymentSerializer, **COMMON_ERRORS},
+    )
+    def post(self, request: Request, assessment_id: str) -> Response:
+        if not bool(getattr(settings, "DEMO_PAYMENTS_ENABLED", False)):
+            raise NotFound()
+        assessment = selectors.get_own_assessment(user=request.user, assessment_id=assessment_id)
+        evaluation = _evaluation_for(assessment)
+        payment = PaymentService.create_demo(
+            evaluation=evaluation, payment_method=PaymentMethod.CULQI
+        )
+        return Response(dict(PaymentSerializer(payment).data), status=status.HTTP_200_OK)
 
 
 class LabRecommendationsView(APIView):

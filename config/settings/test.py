@@ -91,6 +91,7 @@ CULQI_WEBHOOK_SECRET = "test-culqi-webhook-secret"
 # Tests never reach the real provider, whatever a developer's .env selects.
 PAYMENT_PROVIDER = "apps.assessments.payments.FakePaymentProvider"
 PAYMENTS_AUTO_CONFIRM = False
+DEMO_PAYMENTS_ENABLED = True
 CULQI_SECRET_KEY = ""
 DAILY_WEBHOOK_SECRET = "test-daily-webhook-secret"
 

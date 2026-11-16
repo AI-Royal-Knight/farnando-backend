@@ -58,6 +58,9 @@ if str(PAYMENT_PROVIDER).endswith("FakePaymentProvider"):
 if env.bool("PAYMENTS_AUTO_CONFIRM", default=False):
     raise ImproperlyConfigured("PAYMENTS_AUTO_CONFIRM is for local development only.")
 PAYMENTS_AUTO_CONFIRM = False
+if env.bool("DEMO_PAYMENTS_ENABLED", default=False):
+    raise ImproperlyConfigured("DEMO_PAYMENTS_ENABLED is for local development only.")
+DEMO_PAYMENTS_ENABLED = False
 if str(PAYMENT_PROVIDER).endswith("CulqiPaymentProvider") and not env(
     "CULQI_SECRET_KEY", default=""
 ):

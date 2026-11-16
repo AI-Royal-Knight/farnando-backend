@@ -11,12 +11,19 @@ from django.test import override_settings
 from rest_framework.test import APIClient
 
 from apps.assessments.enums import EvaluationStatus, FeeStatus, PaymentStatus
-from apps.assessments.models import Evaluation, Payment
+from apps.assessments.models import Evaluation, Payment, Program
 from tests.test_assessments_part2 import submitted_assessment
 
 pytestmark = pytest.mark.django_db
 
 FAKE = "apps.assessments.payments.FakePaymentProvider"
+
+
+@pytest.fixture
+def fee_required() -> None:
+    """Intake fees are waived by default now; these tests exercise the legacy payment path."""
+
+    Program.objects.filter(slug="weight-loss").update(fee_is_waived=False)
 
 
 def _pay(client: APIClient, assessment_id: object) -> None:
@@ -31,7 +38,10 @@ def _pay(client: APIClient, assessment_id: object) -> None:
 
 @override_settings(PAYMENTS_AUTO_CONFIRM=True, PAYMENT_PROVIDER=FAKE)
 def test_fake_fee_payment_is_settled_after_commit(
-    auth_client: APIClient, patient_user: object, django_capture_on_commit_callbacks: object
+    auth_client: APIClient,
+    patient_user: object,
+    fee_required,
+    django_capture_on_commit_callbacks: object,
 ) -> None:
     assessment, _ = submitted_assessment(auth_client, patient_user)
     with django_capture_on_commit_callbacks(execute=True):  # type: ignore[operator]
@@ -46,7 +56,10 @@ def test_fake_fee_payment_is_settled_after_commit(
 
 @override_settings(PAYMENTS_AUTO_CONFIRM=False, PAYMENT_PROVIDER=FAKE)
 def test_without_the_flag_payment_waits_for_the_webhook(
-    auth_client: APIClient, patient_user: object, django_capture_on_commit_callbacks: object
+    auth_client: APIClient,
+    patient_user: object,
+    fee_required,
+    django_capture_on_commit_callbacks: object,
 ) -> None:
     assessment, _ = submitted_assessment(auth_client, patient_user)
     with django_capture_on_commit_callbacks(execute=True):  # type: ignore[operator]
@@ -97,4 +110,45 @@ def test_production_rejects_auto_confirm(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("PAYMENT_PROVIDER", "apps.assessments.payments.CulqiPaymentProvider")
     monkeypatch.setenv("PAYMENTS_AUTO_CONFIRM", "True")
     with pytest.raises(ImproperlyConfigured, match="PAYMENTS_AUTO_CONFIRM"):
+        _load_production()
+
+
+@override_settings(DEMO_PAYMENTS_ENABLED=True)
+def test_demo_pay_settles_the_fee_without_a_provider(
+    auth_client: APIClient, patient_user: object, fee_required
+) -> None:
+    assessment, _ = submitted_assessment(auth_client, patient_user)
+
+    response = auth_client.post(
+        f"/api/v1/assessments/{assessment.id}/fee/demo-pay/", {}, format="json"
+    )
+
+    assert response.status_code == 200, response.json()
+    assert response.json()["status"] == PaymentStatus.SUCCEEDED
+    payment = Payment.objects.get(evaluation__assessment=assessment)
+    assert payment.provider_payment_id.startswith("demo_")
+    evaluation = Evaluation.objects.get(assessment=assessment)
+    assert evaluation.status == EvaluationStatus.SUBMITTED
+    assert evaluation.fee.status == FeeStatus.PAID
+
+
+@override_settings(DEMO_PAYMENTS_ENABLED=False)
+def test_demo_pay_is_disabled_without_the_flag(
+    auth_client: APIClient, patient_user: object, fee_required
+) -> None:
+    assessment, _ = submitted_assessment(auth_client, patient_user)
+
+    response = auth_client.post(
+        f"/api/v1/assessments/{assessment.id}/fee/demo-pay/", {}, format="json"
+    )
+
+    assert response.status_code == 404
+    assert Evaluation.objects.get(assessment=assessment).status == EvaluationStatus.AWAITING_PAYMENT
+
+
+def test_production_rejects_demo_payments(monkeypatch: pytest.MonkeyPatch) -> None:
+    _production_env(monkeypatch)
+    monkeypatch.setenv("PAYMENT_PROVIDER", "apps.assessments.payments.CulqiPaymentProvider")
+    monkeypatch.setenv("DEMO_PAYMENTS_ENABLED", "True")
+    with pytest.raises(ImproperlyConfigured, match="DEMO_PAYMENTS_ENABLED"):
         _load_production()

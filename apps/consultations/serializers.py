@@ -20,10 +20,23 @@ class PhysicianSummarySerializer(serializers.Serializer[Any]):
 
 
 class ConsultationTypeSerializer(serializers.ModelSerializer[ConsultationType]):
+    fee = serializers.SerializerMethodField()
+
     class Meta:
         model = ConsultationType
-        fields = ["id", "code", "name", "description", "duration_minutes", "is_initial"]
+        fields = [
+            "id",
+            "code",
+            "name",
+            "description",
+            "duration_minutes",
+            "is_initial",
+            "fee",
+        ]
         read_only_fields = fields
+
+    def get_fee(self, obj: ConsultationType) -> dict[str, str]:
+        return {"amount": f"{obj.fee_amount:.2f}", "currency": obj.fee_currency}
 
 
 class ConsultationTypeRefSerializer(serializers.Serializer[Any]):
@@ -136,6 +149,10 @@ class ConsultationCreateSerializer(StrictSerializer):
     patient_note = serializers.CharField(
         max_length=500, required=False, allow_blank=True, allow_null=True
     )
+    # The visit fee is charged in the same request when the type has one.
+    payment_method = serializers.ChoiceField(choices=["CULQI"], required=False)
+    provider_token = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    demo_payment = serializers.BooleanField(required=False, default=False)
 
 
 class RescheduleSerializer(StrictSerializer):

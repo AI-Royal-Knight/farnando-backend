@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
@@ -155,6 +156,9 @@ class ConsultationType(BaseModel):
     is_initial = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True, db_index=True)
     position = models.PositiveIntegerField(default=0)
+    # Fee charged when a patient books this visit (0 = free, e.g. reschedules never charge).
+    fee_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("25.00"))
+    fee_currency = models.CharField(max_length=3, default="USD")
 
     class Meta:
         ordering = ["position", "name"]

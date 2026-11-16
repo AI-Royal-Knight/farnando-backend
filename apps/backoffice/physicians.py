@@ -105,6 +105,8 @@ def card_payload(user: User) -> dict[str, Any]:
     return {
         "id": user.pk,
         "full_name": user.full_name or profile.display_name,
+        # Public name patients see (e.g. "Dr. Marcus Vance, MD"); falls back to the account name.
+        "display_name": profile.display_name or user.full_name,
         "avatar_url": avatar_url_for(profile),
         "specialty": {"id": specialty.pk, "name": specialty.name} if specialty else None,
         "headline": profile.headline,

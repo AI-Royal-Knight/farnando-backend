@@ -122,6 +122,7 @@ class PaymentPurpose(models.TextChoices):
     EVALUATION_FEE = "EVALUATION_FEE", "Evaluation fee"
     ORDER = "ORDER", "Order"
     SUBSCRIPTION_RENEWAL = "SUBSCRIPTION_RENEWAL", "Subscription renewal"
+    CONSULTATION_FEE = "CONSULTATION_FEE", "Consultation fee"
 
 
 class ChecklistState(models.TextChoices):

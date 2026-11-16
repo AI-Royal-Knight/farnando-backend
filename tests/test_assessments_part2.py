@@ -29,6 +29,16 @@ from apps.assessments.tasks import scan_lab_upload
 from apps.core.models import AuditLog
 from tests.factories.users import PatientFactory, PhysicianFactory
 
+
+@pytest.fixture
+def fee_required() -> None:
+    """Intake fees are waived by default now; these tests exercise the legacy payment path."""
+
+    Program.objects.filter(slug="weight-loss").update(
+        fee_is_waived=False, fee_amount=Decimal("25.00")
+    )
+
+
 pytestmark = pytest.mark.django_db
 
 VERSION = "2026-11-01"
@@ -443,7 +453,9 @@ def test_summary_and_projection(auth_client: APIClient, patient_user) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_submit_creates_awaiting_payment_evaluation(auth_client: APIClient, patient_user) -> None:
+def test_submit_creates_awaiting_payment_evaluation(
+    auth_client: APIClient, patient_user, fee_required
+) -> None:
     assessment, result = submitted_assessment(auth_client, patient_user)
     assert result == {
         "assessment_id": str(assessment.id),
@@ -596,7 +608,7 @@ def test_cancel_in_review_is_rejected(auth_client: APIClient, patient_user) -> N
 # --------------------------------------------------------------------------- #
 
 
-def test_fee_and_payment_flow(auth_client: APIClient, patient_user) -> None:
+def test_fee_and_payment_flow(auth_client: APIClient, patient_user, fee_required) -> None:
     assessment, _result = submitted_assessment(auth_client, patient_user)
     fee_response = auth_client.get(f"/api/v1/assessments/{assessment.id}/fee/")
     assert fee_response.status_code == 200
@@ -623,7 +635,7 @@ def test_fee_and_payment_flow(auth_client: APIClient, patient_user) -> None:
     assert evaluation.fee.status == FeeStatus.PAID
 
 
-def test_payment_decline_returns_402(auth_client: APIClient, patient_user) -> None:
+def test_payment_decline_returns_402(auth_client: APIClient, patient_user, fee_required) -> None:
     assessment, _result = submitted_assessment(auth_client, patient_user)
     response = auth_client.post(
         f"/api/v1/assessments/{assessment.id}/fee/pay/",
@@ -635,7 +647,9 @@ def test_payment_decline_returns_402(auth_client: APIClient, patient_user) -> No
     assert response.json()["code"] == "payment_failed"
 
 
-def test_payment_requires_awaiting_payment(auth_client: APIClient, patient_user) -> None:
+def test_payment_requires_awaiting_payment(
+    auth_client: APIClient, patient_user, fee_required
+) -> None:
     assessment, _result = submitted_assessment(auth_client, patient_user)
     evaluation = Evaluation.objects.get(assessment=assessment)
     evaluation.status = EvaluationStatus.SUBMITTED
@@ -849,7 +863,7 @@ def test_evaluation_not_found_for_draft(auth_client: APIClient, patient_user) ->
 
 
 def test_evaluation_view_and_non_owner_audit(
-    auth_client: APIClient, patient_user, make_auth_client, admin_user
+    auth_client: APIClient, patient_user, fee_required, make_auth_client, admin_user
 ) -> None:
     assessment, _result = submitted_assessment(auth_client, patient_user)
     response = auth_client.get(f"/api/v1/assessments/{assessment.id}/evaluation/")
@@ -904,3 +918,13 @@ def test_prescription_download(auth_client: APIClient, patient_user) -> None:
     assert response.status_code == 200
     assert response.json()["url"]
     assert AuditLog.objects.filter(action="prescription.downloaded").exists()
+
+
+def test_submit_with_waived_fee_skips_payment(auth_client: APIClient, patient_user) -> None:
+    """The intake is free: submission goes straight to the lab step."""
+
+    assessment, result = submitted_assessment(auth_client, patient_user)
+    assert result["evaluation_status"] == EvaluationStatus.SUBMITTED
+    assert result["next"] == "RECOMMENDED_LABS"
+    evaluation = Evaluation.objects.get(assessment=assessment)
+    assert evaluation.fee.status in (FeeStatus.WAIVED, FeeStatus.NOT_REQUIRED)

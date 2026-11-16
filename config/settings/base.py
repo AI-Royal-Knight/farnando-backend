@@ -659,6 +659,10 @@ PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="apps.assessments.payments.Fa
 # Local/compose only: settle fake-provider charges at once instead of waiting for a webhook.
 # Production refuses to start with this on (config/settings/production.py).
 PAYMENTS_AUTO_CONFIRM = env.bool("PAYMENTS_AUTO_CONFIRM", default=False)
+# Local/demo only: expose `POST /assessments/{id}/fee/demo-pay/`, which settles the fee
+# without a provider so the patient portal flow can be exercised without a card.
+# Production refuses to start with this on (config/settings/production.py).
+DEMO_PAYMENTS_ENABLED = env.bool("DEMO_PAYMENTS_ENABLED", default=False)
 # Culqi (PAYMENT_PROVIDER=apps.assessments.payments.CulqiPaymentProvider). The public key lives
 # in the frontend; only the secret key is needed here.
 CULQI_SECRET_KEY = env("CULQI_SECRET_KEY", default="")

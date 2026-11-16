@@ -13,6 +13,8 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
+from apps.assessments.enums import PaymentPurpose, PaymentStatus
+from apps.assessments.models import Payment
 from apps.consultations import services
 from apps.consultations.models import AvailabilityBlock, Consultation, ConsultationStatus
 from apps.core.models import AuditLog
@@ -69,6 +71,7 @@ def book(client: APIClient, physician: User, start: str, *, code: str = "INITIAL
             "consultation_type_id": str(consultation_type(code).pk),
             "start": start,
             "patient_note": "<b>Hola</b> doctor",
+            "demo_payment": True,
         },
         format="json",
         HTTP_IDEMPOTENCY_KEY=idem(),
@@ -195,6 +198,7 @@ def test_booking_idempotent_replay(auth_client: APIClient, eligible: User, physi
         "physician_id": str(physician.pk),
         "consultation_type_id": str(consultation_type().pk),
         "start": start,
+        "demo_payment": True,
     }
     first = auth_client.post(
         "/api/v1/consultations/", payload, format="json", HTTP_IDEMPOTENCY_KEY=key
@@ -238,6 +242,7 @@ def test_booking_validation(auth_client: APIClient, eligible: User, physician: U
             "consultation_type_id": str(consultation_type().pk),
             "start": start,
             "assessment_id": str(other_assessment.pk),
+            "demo_payment": True,
         },
         format="json",
         HTTP_IDEMPOTENCY_KEY=idem(),
@@ -450,3 +455,36 @@ def test_video_webhook_rejects_bad_signature(api_client: APIClient) -> None:
 
 def test_unused_fixture_helper(make_auth_client: Callable[[User], APIClient]) -> None:
     assert callable(make_auth_client)
+
+
+def test_booking_charges_the_consultation_fee(
+    auth_client: APIClient, eligible: User, physician: User
+) -> None:
+    start = slots(auth_client, physician)[0]["start"]
+    response = book(auth_client, physician, start)
+    assert response.status_code == 201, response.json()
+
+    consultation = Consultation.objects.get(pk=response.json()["id"])
+    payment = Payment.objects.get(consultation=consultation)
+    assert payment.purpose == PaymentPurpose.CONSULTATION_FEE
+    assert payment.status == PaymentStatus.SUCCEEDED
+    assert payment.amount == consultation_type().fee_amount
+    assert payment.provider_payment_id.startswith("demo_")
+
+
+def test_booking_a_paid_visit_requires_payment(
+    auth_client: APIClient, eligible: User, physician: User
+) -> None:
+    start = slots(auth_client, physician)[0]["start"]
+    response = auth_client.post(
+        "/api/v1/consultations/",
+        {
+            "physician_id": str(physician.pk),
+            "consultation_type_id": str(consultation_type().pk),
+            "start": start,
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=idem(),
+    )
+    assert response.status_code == 400
+    assert not Consultation.objects.filter(patient=eligible).exists()

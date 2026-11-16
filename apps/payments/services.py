@@ -51,6 +51,7 @@ def charge(
     idempotency_key: str,
     order: Any = None,
     subscription: Any = None,
+    consultation: Any = None,
     raise_on_decline: bool = True,
 ) -> Payment:
     """Create a provider charge. A synchronous success stays PENDING until the webhook."""
@@ -68,6 +69,7 @@ def charge(
         purpose=purpose,
         order=order,
         subscription=subscription,
+        consultation=consultation,
         status=status,
         amount=amount,
         currency=currency,
@@ -331,6 +333,18 @@ def _charge_failed(payment: Payment, failure_code: str) -> None:
         order_services.on_order_payment_failed(payment)
     elif payment.purpose == PaymentPurpose.SUBSCRIPTION_RENEWAL:
         order_services.on_renewal_failed(payment)
+    elif payment.purpose == PaymentPurpose.CONSULTATION_FEE:
+        from apps.consultations import services as consultation_services
+        from apps.consultations.models import ConsultationStatus
+
+        consultation = payment.consultation
+        if consultation is not None and consultation.status == ConsultationStatus.REQUESTED:
+            consultation_services.transition(
+                consultation,
+                ConsultationStatus.CANCELLED,
+                actor=None,
+                reason="Consultation payment failed",
+            )
 
 
 def _refund_succeeded(payment: Payment, refunded: Decimal | None) -> None:

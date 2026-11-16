@@ -338,6 +338,34 @@ class PaymentService:
         return payment
 
     @staticmethod
+    def create_demo(*, evaluation: Evaluation, payment_method: str) -> Payment:
+        """Settle the fee without contacting a provider. Local/demo only (see settings)."""
+
+        fee = evaluation.fee
+        if evaluation.status != EvaluationStatus.AWAITING_PAYMENT:
+            if fee.status == FeeStatus.PAID:
+                raise Conflict("This evaluation has already been paid.")
+            raise InvalidStateTransition()
+        if fee.status == FeeStatus.PAID:
+            raise Conflict("This evaluation has already been paid.")
+
+        payment = Payment.objects.create(
+            user=evaluation.assessment.user,
+            purpose=PaymentPurpose.EVALUATION_FEE,
+            evaluation=evaluation,
+            fee=fee,
+            status=PaymentStatus.PENDING,
+            amount=fee.amount,
+            currency=fee.currency,
+            provider=payment_method,
+            provider_payment_id=f"demo_{uuid.uuid4().hex}",
+            failure_code="",
+        )
+        return PaymentService.mark_succeeded(
+            payment_id=payment.pk, reason="Demo payment (provider skipped)"
+        )
+
+    @staticmethod
     def mark_succeeded(*, payment_id: Any, actor: Any = None, reason: str = "") -> Payment:
         """Called by the verified Part 3 webhook after signature validation."""
 

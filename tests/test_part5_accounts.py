@@ -198,6 +198,7 @@ def test_physician_verification_suspension_and_credentials(admin_client: APIClie
     assert cards["count"] == 2
     card = next(row for row in cards["results"] if row["id"] == str(pending.pk))
     assert card["verification_status"] == "PENDING"
+    assert card["display_name"]  # public name, falls back to the account name
     assert set(card["stats"]) == {
         "assigned_evaluations_count",
         "active_patients_count",

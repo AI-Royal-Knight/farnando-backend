@@ -55,6 +55,9 @@ CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
 # The fake payment provider never sends webhooks, so settle its charges immediately.
 PAYMENTS_AUTO_CONFIRM = env.bool("PAYMENTS_AUTO_CONFIRM", default=True)
 
+# Local only: let the patient portal settle the evaluation fee without a card ("Skip payment").
+DEMO_PAYMENTS_ENABLED = env.bool("DEMO_PAYMENTS_ENABLED", default=True)
+
 REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [
     "rest_framework.renderers.JSONRenderer",
     "rest_framework.renderers.BrowsableAPIRenderer",

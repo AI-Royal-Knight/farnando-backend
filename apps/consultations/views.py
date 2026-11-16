@@ -295,7 +295,10 @@ class ConsultationListCreateView(APIView):
 
         def create() -> tuple[int, dict[str, Any]]:
             consultation = services.book(
-                patient=user, data=dict(serializer.validated_data), request=request
+                patient=user,
+                data=dict(serializer.validated_data),
+                request=request,
+                idempotency_key=request.headers.get("Idempotency-Key") or "",
             )
             return status.HTTP_201_CREATED, dict(ConsultationSerializer(consultation).data)
 

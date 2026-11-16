@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timedelta
 from typing import Any, cast
 
@@ -214,7 +215,53 @@ def _validate_physician(physician_id: Any) -> User:
     return cast(User, physician)
 
 
-def book(*, patient: User, data: dict[str, Any], request: Any) -> Consultation:
+def _charge_consultation(
+    *,
+    consultation: Consultation,
+    patient: User,
+    demo_payment: bool,
+    provider_token: str,
+    idempotency_key: str,
+) -> None:
+    """Charge the visit fee; the local demo settles it without contacting the provider."""
+
+    from apps.assessments.enums import PaymentPurpose, PaymentStatus
+    from apps.assessments.models import Payment
+    from apps.assessments.payments import PaymentService
+    from apps.payments import services as payment_services
+
+    consultation_type = consultation.consultation_type
+    if demo_payment:
+        payment = Payment.objects.create(
+            user=patient,
+            purpose=PaymentPurpose.CONSULTATION_FEE,
+            consultation=consultation,
+            status=PaymentStatus.PENDING,
+            amount=consultation_type.fee_amount,
+            currency=consultation_type.fee_currency,
+            provider="CULQI",
+            provider_payment_id=f"demo_{uuid.uuid4().hex}",
+        )
+        PaymentService.mark_succeeded(
+            payment_id=payment.pk,
+            actor=patient,
+            reason="Demo consultation payment (provider skipped)",
+        )
+        return
+    payment_services.charge(
+        user=patient,
+        purpose=PaymentPurpose.CONSULTATION_FEE,
+        amount=consultation_type.fee_amount,
+        currency=consultation_type.fee_currency,
+        provider_token=provider_token,
+        idempotency_key=f"{idempotency_key or uuid.uuid4().hex}:consultation",
+        consultation=consultation,
+    )
+
+
+def book(
+    *, patient: User, data: dict[str, Any], request: Any, idempotency_key: str = ""
+) -> Consultation:
     if not has_consultation_eligibility(patient):
         raise EvaluationRequired()
     if not ConsentService.has_current_consents(patient):
@@ -225,6 +272,14 @@ def book(*, patient: User, data: dict[str, Any], request: Any) -> Consultation:
     ).first()
     if consultation_type is None:
         raise ValidationError({"consultation_type_id": ["Unknown consultation type."]})
+
+    fee_amount = consultation_type.fee_amount
+    requires_payment = fee_amount > 0
+    demo_payment = bool(data.get("demo_payment"))
+    provider_token = (data.get("provider_token") or "").strip()
+    if requires_payment and not demo_payment and not provider_token:
+        raise ValidationError({"payment": ["Payment is required to book this consultation."]})
+
     assessment = None
     if data.get("assessment_id"):
         assessment = Assessment.objects.filter(pk=data["assessment_id"], user=patient).first()
@@ -262,6 +317,14 @@ def book(*, patient: User, data: dict[str, Any], request: Any) -> Consultation:
                 to_status=ConsultationStatus.REQUESTED,
                 actor=patient,
             )
+            if requires_payment:
+                _charge_consultation(
+                    consultation=consultation,
+                    patient=patient,
+                    demo_payment=demo_payment,
+                    provider_token=provider_token,
+                    idempotency_key=idempotency_key,
+                )
             record_audit(
                 actor=patient,
                 action="consultation.requested",

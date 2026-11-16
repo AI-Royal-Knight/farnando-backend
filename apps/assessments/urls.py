@@ -60,6 +60,11 @@ urlpatterns = [
         name="assessment-fee-pay",
     ),
     path(
+        "assessments/<uuid:assessment_id>/fee/demo-pay/",
+        views.AssessmentFeeDemoPayView.as_view(),
+        name="assessment-fee-demo-pay",
+    ),
+    path(
         "assessments/<uuid:assessment_id>/lab-recommendations/",
         views.LabRecommendationsView.as_view(),
         name="assessment-lab-recommendations",

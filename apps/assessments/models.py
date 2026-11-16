@@ -161,7 +161,9 @@ class Program(BaseModel):
     # Evaluation fee configuration.
     fee_amount = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("25.00"))
     fee_currency = models.CharField(max_length=3, default="USD")
-    fee_is_waived = models.BooleanField(default=False)
+    fee_is_waived = models.BooleanField(
+        default=True, help_text="Intake is free by default; the visit fee is charged at booking."
+    )
     fee_title = models.CharField(max_length=160, default="What does your evaluation include?")
     fee_inclusions = models.JSONField(default=_fee_inclusions)
     payment_methods = models.JSONField(default=_payment_methods)
@@ -588,6 +590,13 @@ class Payment(BaseModel):
     subscription = models.ForeignKey(
         "orders.Subscription",
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="payments",
+    )
+    consultation = models.ForeignKey(
+        "consultations.Consultation",
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="payments",
