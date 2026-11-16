@@ -44,14 +44,14 @@ def send_contact_message_emails(self: object, contact_id: str) -> None:
         return
     _send(
         to=message.email,
-        subject="We received your message — Adelgaceya",
+        subject="Recibimos tu mensaje — Adelgaceya",
         template="contact_ack",
         context={"full_name": message.full_name, "message": message.message},
     )
     for staff_email in settings.SUPPORT_NOTIFICATION_EMAILS:
         _send(
             to=staff_email,
-            subject=f"New contact message {message.pk}",
+            subject="Nuevo mensaje de contacto — Adelgaceya",
             template="contact_staff",
             context={"message": message},
         )
@@ -66,7 +66,7 @@ def send_complaint_emails(self: object, complaint_id: str) -> None:
         return
     _send(
         to=complaint.email,
-        subject=f"Complaint {complaint.complaint_number} received",
+        subject=f"Registramos tu reclamo {complaint.complaint_number} — Adelgaceya",
         template="complaint_ack",
         context={
             "full_name": complaint.full_name,
@@ -77,7 +77,7 @@ def send_complaint_emails(self: object, complaint_id: str) -> None:
     for staff_email in settings.SUPPORT_NOTIFICATION_EMAILS:
         _send(
             to=staff_email,
-            subject=f"New complaints-book entry {complaint.complaint_number}",
+            subject=f"Nuevo reclamo {complaint.complaint_number} — Adelgaceya",
             template="complaint_staff",
             context={"complaint": complaint},
         )
@@ -97,7 +97,7 @@ def send_contact_ticket_emails(self: object, ticket_id: str) -> None:
     first = ticket.messages.order_by("created_at").first()
     _send(
         to=ticket.requester_email,
-        subject=f"We received your message ({ticket.reference}) — Adelgaceya",
+        subject=f"Recibimos tu mensaje ({ticket.reference}) — Adelgaceya",
         template="contact_ack",
         context={"full_name": ticket.requester_name, "message": first.body if first else ""},
     )

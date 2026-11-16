@@ -25,7 +25,7 @@ def test_seed_demo_creates_roles_and_is_idempotent() -> None:
     assert User.objects.get(email="paciente@adelgaceya.pe").is_email_verified is True
 
     site = SiteSettings.load()
-    assert site.contact_email == "contact@adelgaceya.pe"
+    assert site.contact_email == "contacto@adelgaceya.pe"
     assert site.contact_phone == "+51 1 555 0100"
     assert site.address == "Av. Larco 1234, Miraflores, Lima 15074, Perú"
     assert site.legal_entity_name == "Adelgaceya"

@@ -107,7 +107,7 @@ class Command(BaseCommand):
         site = SiteSettings.load()
         # Contract Part 1 v1.2 demo values. Replace with real data before launch;
         # the API always reads these from the database, never from code.
-        site.contact_email = "contact@adelgaceya.pe"
+        site.contact_email = "contacto@adelgaceya.pe"
         site.contact_phone = "+51 1 555 0100"
         site.address = "Av. Larco 1234, Miraflores, Lima 15074, Perú"
         site.legal_entity_name = "Adelgaceya"

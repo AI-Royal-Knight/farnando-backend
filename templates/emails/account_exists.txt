@@ -1,9 +1,14 @@
+ADELGACÉYA.PE
+
+Ya tienes una cuenta
+
 Hola {{ first_name|default:"paciente" }},
 
 Ya existe una cuenta de Adelgaceya asociada a este correo. Si intentabas crear una cuenta nueva, inicia sesión o restablece tu contraseña aquí:
 
 {{ reset_url|safe }}
 
-Este enlace vence en {{ expires_hours }} horas. Si no solicitaste nada, ignora este mensaje.
+Este enlace vence en {{ expires_hours }} horas. Si no solicitaste nada, puedes ignorar este mensaje.
 
-Adelgaceya
+Con cariño,
+Equipo Adelgaceya

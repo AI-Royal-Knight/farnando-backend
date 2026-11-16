@@ -57,7 +57,7 @@ def send_verification_email(self: object, user_id: str) -> None:
         return
     _send(
         to=user.email,
-        subject="Verify your Adelgaceya email",
+        subject="Confirma tu correo — Adelgaceya",
         template="email_verification",
         context={
             "first_name": user.get_short_name(),
@@ -77,7 +77,7 @@ def send_password_reset_email(self: object, user_id: str) -> None:
         return
     _send(
         to=user.email,
-        subject="Reset your Adelgaceya password",
+        subject="Restablece tu contraseña — Adelgaceya",
         template="password_reset",
         context={
             "first_name": user.get_short_name(),
@@ -97,7 +97,7 @@ def send_account_exists_email(self: object, user_id: str) -> None:
         return
     _send(
         to=user.email,
-        subject="Your Adelgaceya account",
+        subject="Tu cuenta de Adelgaceya",
         template="account_exists",
         context={
             "first_name": user.get_short_name(),

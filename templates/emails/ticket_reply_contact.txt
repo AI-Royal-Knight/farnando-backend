@@ -1,5 +1,14 @@
+ADELGACÉYA.PE
+
+Respondimos tu mensaje
+
 Hola {{ full_name }},
+
+Nuestro equipo revisó tu mensaje y esta es la respuesta:
 
 {{ body }}
 
-Adelgaceya
+Si necesitas algo más, responde a este correo y seguimos conversando.
+
+Con cariño,
+Equipo Adelgaceya

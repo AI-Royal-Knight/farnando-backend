@@ -1,9 +1,11 @@
-Hola {{ full_name }},
+ADELGACÉYA.PE
 
 {{ title }}
 
+Hola {{ full_name }},
+
 {{ body }}
 
-{{ app_url }}
+Abrir Adelgaceya: {{ app_url }}
 
-Adelgaceya
+Equipo Adelgaceya

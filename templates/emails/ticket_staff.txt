@@ -1,3 +1,9 @@
+ADELGACÉYA.PE
+
+New support ticket
+
 A new support ticket was created: {{ reference }}.
 
-Open the Adelgaceya staff portal to review it.
+Open the Adelgaceya staff portal to review it: {{ frontend_url }}/staff
+
+Adelgaceya · Internal notification

@@ -1,9 +1,13 @@
-Nuevo registro en el Libro de Reclamaciones
+ADELGACÉYA.PE
+
+Nuevo reclamo en el Libro de Reclamaciones
 
 Número: {{ complaint.complaint_number }}
 Tipo: {{ complaint.filing_type }}
 Categoría: {{ complaint.category.code }}
 De: {{ complaint.full_name }} <{{ complaint.email }}>
-Fecha límite: {{ complaint.response_due_at }}
+Fecha límite: {{ complaint.response_due_at|date:"d/m/Y H:i" }}
 
 {{ complaint.description }}
+
+Abrir portal de staff: {{ frontend_url }}/staff

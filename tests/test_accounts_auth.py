@@ -103,6 +103,9 @@ def test_registration_duplicate_sends_email_but_is_generic(
     assert User.objects.filter(email="known@example.com").count() == 1
     assert len(mail.outbox) == 1
     assert "Ya existe" in mail.outbox[0].body
+    html, mime = mail.outbox[0].alternatives[0]
+    assert mime == "text/html"
+    assert "#0d9488" in html and "/brand/logo.png" in html
 
 
 def test_registration_requires_current_consents_and_valid_password(api_client: APIClient) -> None:

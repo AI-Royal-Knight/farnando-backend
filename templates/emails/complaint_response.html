@@ -1,0 +1,20 @@
+{% extends "emails/base.html" %}
+{% block title %}Respuesta a tu reclamo {{ complaint_number }} · Adelgaceya{% endblock %}
+{% block preheader %}Respuesta a tu reclamo {{ complaint_number }} del Libro de Reclamaciones.{% endblock %}
+{% block content %}
+  {% include "emails/partials/heading.html" with eyebrow="Libro de Reclamaciones" title="Respuesta a tu reclamo" %}
+  <p style="margin:0 0 16px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#3e4948;">Hola {{ full_name }},</p>
+  <p style="margin:0 0 16px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#3e4948;">
+    Esta es la respuesta de nuestro equipo a tu reclamo <strong style="color:#141b2b;">{{ complaint_number }}</strong>:
+  </p>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;background-color:#faf9ff;border:1px solid #e9edff;border-radius:12px;">
+    <tr>
+      <td style="padding:18px 20px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#3e4948;">
+        {{ body|linebreaksbr }}
+      </td>
+    </tr>
+  </table>
+  <p style="margin:18px 0 0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#718096;">
+    Si necesitas algo más, responde a este correo y con gusto te ayudamos.
+  </p>
+{% endblock %}

@@ -23,7 +23,19 @@ class DjangoEmailService:
     """Renders ``emails/<template>.txt`` and optional sibling ``.html``."""
 
     def send(self, *, to: str, subject: str, template: str, context: dict[str, object]) -> None:
-        text_body = render_to_string(f"emails/{template}.txt", context)
+        # Shared brand context for every template (logo, footer, legal links).
+        from django.utils import timezone
+
+        from apps.catalog.models import SiteSettings
+
+        render_context: dict[str, object] = {
+            "frontend_url": settings.FRONTEND_URL.rstrip("/"),
+            "recipient_email": to,
+            "site": SiteSettings.load(),
+            "current_year": timezone.now().year,
+            **context,
+        }
+        text_body = render_to_string(f"emails/{template}.txt", render_context)
         message = EmailMultiAlternatives(
             subject=subject,
             body=text_body,
@@ -31,7 +43,7 @@ class DjangoEmailService:
             to=[to],
         )
         try:
-            html_body = render_to_string(f"emails/{template}.html", context)
+            html_body = render_to_string(f"emails/{template}.html", render_context)
         except TemplateDoesNotExist:
             pass
         else:

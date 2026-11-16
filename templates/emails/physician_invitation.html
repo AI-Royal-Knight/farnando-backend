@@ -1,0 +1,15 @@
+{% extends "emails/base.html" %}
+{% block title %}Your Adelgaceya physician invitation{% endblock %}
+{% block preheader %}Complete your Adelgaceya physician registration.{% endblock %}
+{% block content %}
+  {% include "emails/partials/heading.html" with eyebrow="Physician portal" title="Your invitation is ready" %}
+  <p style="margin:0 0 16px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#3e4948;">Hello,</p>
+  <p style="margin:0 0 16px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#3e4948;">
+    You have been invited to join Adelgaceya as a physician. Complete your registration with the secure link below.
+  </p>
+  {% include "emails/partials/button.html" with url=link label="Complete registration" %}
+  <p style="margin:18px 0 0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#718096;">
+    This is a single-use link, valid until {{ expires_at }}. If you did not expect this invitation, ignore this email.
+  </p>
+{% endblock %}
+{% block signoff %}Warm regards,<br><strong style="color:#006766;">The Adelgaceya team</strong>{% endblock %}

@@ -1,8 +1,14 @@
+ADELGACÉYA.PE
+
+Your invitation is ready
+
 Hello,
 
-You have been invited to join Adelgaceya as a physician. Complete your
-registration with this single-use link (valid until {{ expires_at }}):
+You have been invited to join Adelgaceya as a physician. Complete your registration with the secure link below:
 
 {{ link }}
 
-If you did not expect this invitation, ignore this email.
+This is a single-use link, valid until {{ expires_at }}. If you did not expect this invitation, ignore this email.
+
+Warm regards,
+The Adelgaceya team

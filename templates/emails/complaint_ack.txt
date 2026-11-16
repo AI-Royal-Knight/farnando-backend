@@ -1,8 +1,15 @@
+ADELGACÉYA.PE
+
+Libro de Reclamaciones
+
 Hola {{ full_name }},
 
 Registramos tu reclamo en el Libro de Reclamaciones.
 
-Número: {{ complaint_number }}
-Fecha límite de respuesta: {{ response_due_at }}
+Número de reclamo: {{ complaint_number }}
+Fecha límite de respuesta: {{ response_due_at|date:"d/m/Y H:i" }}
 
-Adelgaceya
+Te responderemos antes de la fecha límite indicada.
+
+Con cariño,
+Equipo Adelgaceya

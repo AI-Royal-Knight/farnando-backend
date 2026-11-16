@@ -1,11 +1,14 @@
-<!doctype html>
-<html lang="es">
-  <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
-    <h1 style="font-size: 20px;">Tu cuenta de Adelgaceya</h1>
-    <p>Hola {{ first_name|default:"paciente" }},</p>
-    <p>Ya existe una cuenta asociada a este correo. Si intentabas crear una cuenta nueva, inicia sesión o restablece tu contraseña.</p>
-    <p><a href="{{ reset_url }}">Restablecer mi contraseña</a></p>
-    <p>Este enlace vence en {{ expires_hours }} horas. Si no solicitaste nada, ignora este mensaje.</p>
-    <p>Adelgaceya</p>
-  </body>
-</html>
+{% extends "emails/base.html" %}
+{% block title %}Tu cuenta de Adelgaceya{% endblock %}
+{% block preheader %}Ya existe una cuenta asociada a este correo.{% endblock %}
+{% block content %}
+  {% include "emails/partials/heading.html" with eyebrow="Tu cuenta" title="Ya tienes una cuenta" %}
+  <p style="margin:0 0 16px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#3e4948;">Hola {{ first_name|default:"paciente" }},</p>
+  <p style="margin:0 0 16px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#3e4948;">
+    Ya existe una cuenta de Adelgaceya asociada a este correo. Si intentabas crear una cuenta nueva, inicia sesión o restablece tu contraseña.
+  </p>
+  {% include "emails/partials/button.html" with url=reset_url label="Iniciar sesión o restablecer" %}
+  <p style="margin:18px 0 0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#718096;">
+    Este enlace vence en {{ expires_hours }} horas. Si no solicitaste nada, puedes ignorar este mensaje.
+  </p>
+{% endblock %}

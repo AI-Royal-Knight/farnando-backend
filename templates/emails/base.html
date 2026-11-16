@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="x-apple-disable-message-reformatting">
+    <meta name="color-scheme" content="light only">
+    <meta name="supported-color-schemes" content="light only">
+    <title>{% block title %}Adelgaceya{% endblock %}</title>
+    <!--[if mso]>
+      <noscript>
+        <xml>
+          <o:OfficeDocumentSettings>
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+          </o:OfficeDocumentSettings>
+        </xml>
+      </noscript>
+    <![endif]-->
+    <style>
+      html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+      * { -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; }
+      table, td { mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important; border-collapse: collapse !important; }
+      img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+      a { text-decoration: none; }
+      @media (max-width: 620px) {
+        .email-container { width: 100% !important; }
+        .email-px { padding-left: 22px !important; padding-right: 22px !important; }
+        .email-h1 { font-size: 26px !important; line-height: 34px !important; }
+        .email-btn a { display: block !important; }
+      }
+    </style>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f3f7f6;">
+    <div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;color:transparent;font-size:1px;line-height:1px;">
+      {% block preheader %}{% endblock %}
+    </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f3f7f6;">
+      <tr>
+        <td align="center" style="padding:36px 12px;">
+
+          <!-- Card -->
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="email-container" style="width:600px;max-width:600px;background-color:#ffffff;border:1px solid #e6eef0;border-radius:20px;overflow:hidden;">
+            <tr>
+              <td style="height:5px;background-color:#0d9488;font-size:0;line-height:0;">&nbsp;</td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:30px 40px 22px;" class="email-px">
+                <a href="{{ frontend_url }}" target="_blank" style="text-decoration:none;">
+                  <img src="{{ frontend_url }}/brand/logo.png" width="96" height="96" alt="Adelgaceya" style="display:block;width:96px;height:96px;border:0;">
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 40px;" class="email-px">
+                <div style="height:1px;background-color:#e9eef2;font-size:0;line-height:0;">&nbsp;</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:34px 40px 6px;" class="email-px">
+                {% block content %}{% endblock %}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:6px 40px 38px;" class="email-px">
+                <p style="margin:22px 0 0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;line-height:22px;color:#4b5a66;">
+                  {% block signoff %}Con cariño,<br><strong style="color:#006766;">Equipo Adelgaceya</strong>{% endblock %}
+                </p>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Footer -->
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="email-container" style="width:600px;max-width:600px;">
+            <tr>
+              <td align="center" style="padding:22px 24px 0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;line-height:18px;color:#8a97a6;">
+                <p style="margin:0 0 6px;">{{ site.address|default:"Lima, Perú" }}</p>
+                <p style="margin:0 0 10px;">
+                  <a href="mailto:{{ site.contact_email }}" style="color:#0d9488;text-decoration:none;">{{ site.contact_email }}</a>
+                  {% if site.contact_phone %}<span style="color:#c3ccd6;"> · </span>{{ site.contact_phone }}{% endif %}
+                </p>
+                <p style="margin:0 0 10px;">
+                  <a href="{{ frontend_url }}" target="_blank" style="color:#0d9488;text-decoration:none;">adelgaceya.pe</a>
+                  <span style="color:#c3ccd6;"> · </span>
+                  <a href="{{ frontend_url }}/privacy" target="_blank" style="color:#0d9488;text-decoration:none;">Privacidad</a>
+                  <span style="color:#c3ccd6;"> · </span>
+                  <a href="{{ frontend_url }}/terms" target="_blank" style="color:#0d9488;text-decoration:none;">Términos</a>
+                </p>
+                <p style="margin:0;">© {{ current_year }} {{ site.legal_entity_name|default:"Adelgaceya" }}. Este correo se envió a {{ recipient_email }}.</p>
+              </td>
+            </tr>
+          </table>
+
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

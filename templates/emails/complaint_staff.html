@@ -1,0 +1,31 @@
+{% extends "emails/base.html" %}
+{% block title %}Nuevo reclamo {{ complaint.complaint_number }} · Adelgaceya{% endblock %}
+{% block preheader %}Nuevo registro en el Libro de Reclamaciones.{% endblock %}
+{% block content %}
+  {% include "emails/partials/heading.html" with eyebrow="Libro de Reclamaciones" title="Nuevo reclamo" %}
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;background-color:#f0faf8;border-left:4px solid #26a69a;border-radius:10px;">
+    <tr>
+      <td style="padding:18px 20px;">
+        <p style="margin:0 0 6px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#718096;">Número</p>
+        <p style="margin:0 0 14px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:20px;line-height:28px;font-weight:700;color:#141b2b;">{{ complaint.complaint_number }}</p>
+        <p style="margin:0 0 6px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#718096;">Tipo</p>
+        <p style="margin:0 0 14px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;font-weight:600;color:#141b2b;">{{ complaint.filing_type }}</p>
+        <p style="margin:0 0 6px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#718096;">Categoría</p>
+        <p style="margin:0 0 14px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;font-weight:600;color:#141b2b;">{{ complaint.category.code }}</p>
+        <p style="margin:0 0 6px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#718096;">De</p>
+        <p style="margin:0 0 14px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;font-weight:600;color:#141b2b;">{{ complaint.full_name }} &lt;{{ complaint.email }}&gt;</p>
+        <p style="margin:0 0 6px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#718096;">Fecha límite</p>
+        <p style="margin:0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;font-weight:600;color:#141b2b;">{{ complaint.response_due_at|date:"d/m/Y H:i" }}</p>
+      </td>
+    </tr>
+  </table>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;background-color:#faf9ff;border:1px solid #e9edff;border-radius:12px;">
+    <tr>
+      <td style="padding:18px 20px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#3e4948;">
+        {{ complaint.description|linebreaksbr }}
+      </td>
+    </tr>
+  </table>
+  {% include "emails/partials/button.html" with url=frontend_url|add:"/staff" label="Abrir portal de staff" %}
+{% endblock %}
+{% block signoff %}Adelgaceya · Notificación interna{% endblock %}

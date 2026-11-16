@@ -1,7 +1,14 @@
+ADELGACÉYA.PE
+
+Respuesta a tu reclamo
+
 Hola {{ full_name }},
 
-Respuesta a su reclamo {{ complaint_number }} del Libro de Reclamaciones:
+Esta es la respuesta de nuestro equipo a tu reclamo {{ complaint_number }}:
 
 {{ body }}
 
-Adelgaceya
+Si necesitas algo más, responde a este correo y con gusto te ayudamos.
+
+Con cariño,
+Equipo Adelgaceya

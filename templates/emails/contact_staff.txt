@@ -1,6 +1,10 @@
+ADELGACÉYA.PE
+
 Nuevo mensaje de contacto
 
 De: {{ message.full_name }} <{{ message.email }}>
-Fecha: {{ message.created_at }}
+Fecha: {{ message.created_at|date:"d/m/Y H:i" }}
 
 {{ message.message }}
+
+Abrir portal de staff: {{ frontend_url }}/staff

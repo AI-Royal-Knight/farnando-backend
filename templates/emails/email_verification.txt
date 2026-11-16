@@ -1,9 +1,14 @@
+ADELGACÉYA.PE
+
+Confirma tu correo
+
 Hola {{ first_name|default:"paciente" }},
 
-Confirma tu correo para activar tu cuenta de Adelgaceya:
+Estamos encantados de tenerte aquí. Confirma tu correo para activar tu cuenta y continuar con tu evaluación médica:
 
 {{ verification_url|safe }}
 
-Este enlace vence en {{ expires_hours }} horas. Si no creaste una cuenta, ignora este mensaje.
+Este enlace vence en {{ expires_hours }} horas. Si no creaste una cuenta, puedes ignorar este mensaje.
 
-Adelgaceya
+Con cariño,
+Equipo Adelgaceya

@@ -1,0 +1,23 @@
+{% extends "emails/base.html" %}
+{% block title %}Registramos tu reclamo · Adelgaceya{% endblock %}
+{% block preheader %}Tu reclamo {{ complaint_number }} fue registrado en el Libro de Reclamaciones.{% endblock %}
+{% block content %}
+  {% include "emails/partials/heading.html" with eyebrow="Libro de Reclamaciones" title="Registramos tu reclamo" %}
+  <p style="margin:0 0 16px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#3e4948;">Hola {{ full_name }},</p>
+  <p style="margin:0 0 16px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#3e4948;">
+    Tu reclamo quedó registrado en nuestro Libro de Reclamaciones. Este es el resumen:
+  </p>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;background-color:#f0faf8;border-left:4px solid #26a69a;border-radius:10px;">
+    <tr>
+      <td style="padding:18px 20px;">
+        <p style="margin:0 0 6px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#718096;">Número de reclamo</p>
+        <p style="margin:0 0 14px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:20px;line-height:28px;font-weight:700;color:#141b2b;">{{ complaint_number }}</p>
+        <p style="margin:0 0 6px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#718096;">Fecha límite de respuesta</p>
+        <p style="margin:0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;font-weight:600;color:#141b2b;">{{ response_due_at|date:"d/m/Y H:i" }}</p>
+      </td>
+    </tr>
+  </table>
+  <p style="margin:18px 0 0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#718096;">
+    Te responderemos antes de la fecha límite indicada.
+  </p>
+{% endblock %}
