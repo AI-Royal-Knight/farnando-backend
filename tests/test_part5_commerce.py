@@ -140,6 +140,8 @@ def test_patient_ticket_lifecycle(
     assert reply.status_code == 201
     detail = support.get(f"{TICKETS}{ticket['id']}/").json()
     assert detail["status"] == "AWAITING_CUSTOMER" and detail["first_response_at"]
+    summary = support.get(TICKETS).json()["summary"]
+    assert summary["open"] == 0 and summary["awaiting_customer"] == 1
     assert len(detail["messages"]) == 3 and detail["history"]
     chat = support.get(f"{TICKETS}{ticket['id']}/?view=CHAT").json()
     assert "history" not in chat

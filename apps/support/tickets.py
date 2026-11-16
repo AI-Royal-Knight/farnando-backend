@@ -367,6 +367,7 @@ def staff_summary(queryset: QuerySet[SupportTicket]) -> dict[str, Any]:
         "total": queryset.count(),
         "open": queryset.filter(status=TicketStatus.OPEN).count(),
         "in_progress": queryset.filter(status=TicketStatus.IN_PROGRESS).count(),
+        "awaiting_customer": queryset.filter(status=TicketStatus.AWAITING_CUSTOMER).count(),
         "avg_first_response_minutes": avg_first_response_minutes(queryset),
         "resolved_today": queryset.filter(
             resolved_at__gte=_local_bound(today, end=False),
