@@ -36,6 +36,7 @@ def body(**overrides: Any) -> dict[str, Any]:
         "email": "Lucia@Clinic.pe",
         "license_number": "cmp-77881",
         "specialty_id": str(Specialty.objects.get(name="Endocrinology").pk),
+        "specialty_registration_number": "rne77881",
         "password": PASSWORD,
         "confirm_password": PASSWORD,
         "consents": CONSENTS,
@@ -60,8 +61,7 @@ def test_creates_pending_physician(
     assert profile.verification_status == "PENDING"
     assert profile.license_number == "CMP-77881"
     assert profile.specialty == "Endocrinology"
-    # The registration number is optional at sign-up; the admin checks it when verifying.
-    assert profile.specialty_registration_number == ""
+    assert profile.specialty_registration_number == "RNE77881"
     kinds = set(ConsentRecord.objects.filter(user=user).values_list("document_type", flat=True))
     assert kinds == {"TERMS_OF_SERVICE", "PRIVACY_POLICY", "CLINICIAN_AGREEMENT"}
     assert any("lucia@clinic.pe" in message.to for message in mail.outbox)
@@ -113,3 +113,14 @@ def test_verified_email_then_login_reaches_the_pending_gate(api_client: APIClien
     assert client.get("/api/v1/physicians/me/").json()["verification_status"] == "PENDING"
     gated = client.get("/api/v1/physicians/me/dashboard/")
     assert gated.status_code == 403 and gated.json()["code"] == "credentials_not_verified"
+
+
+def test_requires_specialty_registration_number(api_client: APIClient) -> None:
+    payload = body()
+    payload.pop("specialty_registration_number")
+
+    response = api_client.post(URL, payload, format="json")
+
+    assert response.status_code == 400
+    assert "specialty_registration_number" in response.json()["details"]
+    assert not User.objects.filter(email="lucia@clinic.pe").exists()

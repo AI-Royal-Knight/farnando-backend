@@ -50,9 +50,7 @@ class PhysicianRegisterSerializer(StrictSerializer):
     email = serializers.EmailField(max_length=254)
     license_number = serializers.RegexField(r"^[A-Za-z0-9-]{3,20}$")
     specialty_id = serializers.UUIDField()
-    specialty_registration_number = serializers.RegexField(
-        r"^[A-Za-z0-9]{3,20}$", required=False, allow_blank=True
-    )
+    specialty_registration_number = serializers.RegexField(r"^[A-Za-z0-9]{3,20}$")
     phone = serializers.CharField(max_length=16, required=False, allow_blank=True)
     password = serializers.CharField(min_length=8, write_only=True, trim_whitespace=False)
     confirm_password = serializers.CharField(write_only=True, trim_whitespace=False)

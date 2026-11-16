@@ -189,7 +189,8 @@ def register_physician(*, data: dict[str, Any], request: Any) -> User:
 
     The physician confirms their email and can sign in (MFA setup first), but the clinical
     portal stays closed until an admin verifies the license (``admin/physicians/<id>/verify/``).
-    The specialty registration number is optional here; the admin checks it when verifying.
+    Both the CMP license and the specialty registration number (RNE) are required here; the
+    admin checks them when verifying.
     """
 
     email = data["email"].strip().lower()
@@ -198,7 +199,7 @@ def register_physician(*, data: dict[str, Any], request: Any) -> User:
         raise ValidationError({"email": ["Unable to create an account with this email."]})
     with transaction.atomic():
         specialty, license_number, registration = _physician_fields(
-            email=email, data=data, require_registration=False
+            email=email, data=data, require_registration=True
         )
         user = User.objects.create_user(
             email=email,
