@@ -417,3 +417,14 @@ def test_user_model_normalises_email() -> None:
     )
     assert user.email == "mixedcase@example.com"
     assert user.get_full_name() == "Mixed Case"
+
+
+def test_send_test_email_command() -> None:
+    from django.core import mail
+    from django.core.management import call_command
+
+    call_command("send_test_email", "contacto@adelgaceya.pe")
+
+    assert len(mail.outbox) == 1
+    assert mail.outbox[0].to == ["contacto@adelgaceya.pe"]
+    assert "Adelgaceya" in mail.outbox[0].subject

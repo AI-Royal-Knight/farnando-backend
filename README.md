@@ -67,6 +67,31 @@ On a server reached by IP or domain, also set `DJANGO_ALLOWED_HOSTS` (and
 `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_URL`) in `.env`,
 otherwise Django answers `400 Bad Request`.
 
+### Email (Zoho SMTP)
+
+The compose stack uses Mailpit by default, so nothing leaves your machine. For real delivery,
+put the SMTP account in `.env` (it is gitignored):
+
+```bash
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.zoho.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=contacto@adelgaceya.pe
+EMAIL_HOST_PASSWORD=<Zoho app password>
+DEFAULT_FROM_EMAIL=Adelgaceya <contacto@adelgaceya.pe>
+```
+
+Then recreate the services that send mail (`web` handles requests synchronously, `worker` runs
+the Celery email tasks):
+
+```bash
+docker compose up -d --force-recreate web worker beat
+docker compose exec web python manage.py send_test_email contacto@adelgaceya.pe
+```
+
+Never commit `.env`; `.env.example` documents the fields with a placeholder password.
+
 ## Local development without Docker
 
 Requires Python 3.12 and PostgreSQL 16 + Redis 7.

@@ -10,10 +10,14 @@ x-app-environment: &app-environment
   REDIS_URL: redis://redis:6379/0
   CELERY_BROKER_URL: redis://redis:6379/1
   CELERY_RESULT_BACKEND: redis://redis:6379/2
-  EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
-  EMAIL_HOST: mailpit
-  EMAIL_PORT: "1025"
-  DEFAULT_FROM_EMAIL: Adelgaceya <no-reply@adelgaceya.local>
+  # Email: Mailpit by default; set EMAIL_* in .env for real SMTP (e.g. Zoho).
+  EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+  EMAIL_HOST: ${EMAIL_HOST:-mailpit}
+  EMAIL_PORT: ${EMAIL_PORT:-1025}
+  EMAIL_USE_TLS: ${EMAIL_USE_TLS:-False}
+  EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+  EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+  DEFAULT_FROM_EMAIL: "${DEFAULT_FROM_EMAIL:-Adelgaceya <no-reply@adelgaceya.local>}"
   FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
   ENABLE_API_DOCS: "True"
   CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
