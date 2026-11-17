@@ -19,7 +19,7 @@ env_port = $(or $(shell grep -E '^$(1)=' .env 2>/dev/null | tail -n 1 | cut -d= 
 POSTGRES_PORT := $(call env_port,POSTGRES_PORT,5435)
 REDIS_PORT    := $(call env_port,REDIS_PORT,6381)
 MAILPIT_SMTP  := $(call env_port,MAILPIT_SMTP_PORT,1025)
-DEV_PORT      ?= 8001
+DEV_PORT      ?= 8000
 
 # Environment for host runs against the compose services (see `make dev`).
 DEV_ENV := DJANGO_SETTINGS_MODULE=config.settings.local \
@@ -129,7 +129,7 @@ reset-db: ## DESTRUCTIVE: wipe Postgres/Redis/MinIO volumes, then setup again
 
 ##@ Host development (uv, against the compose services)
 
-dev: ## Run the dev server from your checkout on DEV_PORT (default 8001; stop Docker web first)
+dev: ## Run the dev server from your checkout on DEV_PORT (default 8000; stop Docker web first)
 	$(DEV_MANAGE) runserver 0.0.0.0:$(DEV_PORT)
 
 dev-migrate: ## Apply migrations from your checkout to the compose database
