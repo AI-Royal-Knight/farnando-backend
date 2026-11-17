@@ -57,8 +57,12 @@ WHITENOISE_USE_FINDERS = False
 WHITENOISE_AUTOREFRESH = False
 WHITENOISE_MANIFEST_STRICT = True
 
-CORS_ALLOWED_ORIGINS = ["http://localhost:3000"]
-CSRF_TRUSTED_ORIGINS = ["http://testserver", "http://localhost:3000"]
+CORS_ALLOWED_ORIGINS = ["http://localhost:3001", "http://localhost:3002"]
+CSRF_TRUSTED_ORIGINS = [
+    "http://testserver",
+    "http://localhost:3001",
+    "http://localhost:3002",
+]
 
 FIELD_ENCRYPTION_KEYS = ["tW8uBgbY93Ih64CaqRsEIDheNMVimjTE97KQKAyVAxA="]
 
@@ -72,7 +76,7 @@ CONSENT_VERSIONS = {
     "CLINICIAN_AGREEMENT": "2026-11-01",
 }
 
-FRONTEND_URL = "http://localhost:3000"
+FRONTEND_URL = "http://localhost:3001"
 GOOGLE_CLIENT_ID = "test-google-client-id.apps.googleusercontent.com"
 GOOGLE_CLIENT_SECRET = "test-google-client-secret"
 SOCIALACCOUNT_PROVIDERS["google"]["APP"] = {

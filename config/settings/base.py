@@ -29,8 +29,8 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 
 ENVIRONMENT = env("DJANGO_ENVIRONMENT", default="production")
 SITE_NAME = env("SITE_NAME", default="Adelgaceya")
-FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
-BACKEND_URL = env("BACKEND_URL", default="http://localhost:8000")
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3001")
+BACKEND_URL = env("BACKEND_URL", default="http://localhost:8001")
 SITE_ID = 1
 
 # ---------------------------------------------------------------------------

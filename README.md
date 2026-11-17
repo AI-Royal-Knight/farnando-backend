@@ -36,10 +36,10 @@ docker compose exec web python manage.py seed_demo
 
 Open:
 
-- API: <http://localhost:8000/api/v1/>
-- Swagger UI: <http://localhost:8000/api/docs/>
-- ReDoc: <http://localhost:8000/api/redoc/>
-- Admin: <http://localhost:8000/admin/>
+- API: <http://localhost:8001/api/v1/>
+- Swagger UI: <http://localhost:8001/api/docs/>
+- ReDoc: <http://localhost:8001/api/redoc/>
+- Admin: <http://localhost:8001/admin/>
 - Mailpit: <http://localhost:8025/>
 - MinIO console: <http://localhost:9001/> (`minioadmin` / `minioadmin`)
 
@@ -56,7 +56,7 @@ Demo accounts created by `seed_demo` (password `Adelgaceya2026!`):
 > The demo password is public. Never run `seed_demo` against production.
 
 **Ports are picked automatically.** `./scripts/compose-up.sh` (or `make up`)
-tries each default port (API 8000, Postgres 5435, Redis 6381, MinIO
+tries each default port (API 8001, Postgres 5435, Redis 6381, MinIO
 9000/9001, Mailpit 1025/8025). If one is already in use, it takes the next
 free port, saves it to `.env` and prints the final URLs, for example
 `API: http://<host>:8001/api/v1/`. A running stack keeps its ports. To force a

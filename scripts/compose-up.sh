@@ -3,12 +3,12 @@
 #
 # For every published port (API, Postgres, Redis, MinIO, Mailpit):
 #   1. if this stack is already running, keep the port it already uses;
-#   2. otherwise use the preferred port if it is free: the default (e.g. 8000),
+#   2. otherwise use the preferred port if it is free: the default (e.g. 8001),
 #      or a value you set yourself in the environment or .env;
 #   3. otherwise use the next free port above it.
 # Chosen ports are written to .env with an "# auto" comment so plain
 # `docker compose` commands keep using them. Auto lines are never treated as a
-# preference, so every run tries the default (8000) first again.
+# preference, so every run tries the default (8001) first again.
 #
 # Usage: scripts/compose-up.sh [extra `docker compose up` args]
 #        (defaults to: up -d --build)
@@ -22,7 +22,7 @@ MAX_TRIES="${PORT_SEARCH_LIMIT:-100}"
 
 # variable          default  service  container port
 PORTS=(
-  "WEB_PORT           8000  web      8000"
+  "WEB_PORT           8001  web      8000"
   "POSTGRES_PORT      5435  postgres 5432"
   "REDIS_PORT         6381  redis    6379"
   "MINIO_PORT         9000  minio    9000"
@@ -157,9 +157,9 @@ echo "API:           http://$host:$CHOSEN_WEB_PORT/api/v1/"
 echo "API docs:      http://$host:$CHOSEN_WEB_PORT/api/docs/"
 echo "Mailpit:       http://$host:$CHOSEN_MAILPIT_UI_PORT/"
 echo "MinIO console: http://$host:$CHOSEN_MINIO_CONSOLE_PORT/"
-if [ "$CHOSEN_WEB_PORT" != "8000" ]; then
+if [ "$CHOSEN_WEB_PORT" != "8001" ]; then
   echo
-  echo "Port 8000 was busy, so the API runs on $CHOSEN_WEB_PORT."
+  echo "Port 8001 was busy, so the API runs on $CHOSEN_WEB_PORT."
   echo "If you call it by IP or domain, make sure DJANGO_ALLOWED_HOSTS and"
   echo "CSRF_TRUSTED_ORIGINS in $ENV_FILE include that host and port."
 fi

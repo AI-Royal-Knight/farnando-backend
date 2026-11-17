@@ -18,10 +18,10 @@ x-app-environment: &app-environment
   EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
   EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
   DEFAULT_FROM_EMAIL: "${DEFAULT_FROM_EMAIL:-Adelgaceya <no-reply@adelgaceya.local>}"
-  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
   ENABLE_API_DOCS: "True"
-  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
-  CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:${WEB_PORT:-8000},http://localhost:3000}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3001,http://localhost:3002,http://127.0.0.1:3001,http://127.0.0.1:3002}
+  CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:${WEB_PORT:-8001},http://localhost:3001,http://localhost:3002}
   FIELD_ENCRYPTION_KEYS: ${FIELD_ENCRYPTION_KEYS:-tW8uBgbY93Ih64CaqRsEIDheNMVimjTE97KQKAyVAxA=}
   AWS_STORAGE_BUCKET_NAME: adelgaceya-media
   AWS_S3_ENDPOINT_URL: http://minio:9000
@@ -59,8 +59,8 @@ services:
       <<: *app-environment
       RUN_MIGRATIONS: "1"
     ports:
-      # Host port is configurable: set WEB_PORT in .env if 8000 is taken.
-      - "${WEB_PORT:-8000}:8000"
+      # Host port is configurable: set WEB_PORT in .env if 8001 is taken.
+      - "${WEB_PORT:-8001}:8000"
     healthcheck:
       test:
         [
